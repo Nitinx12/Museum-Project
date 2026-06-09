@@ -270,3 +270,7 @@ mlruns/
 !data/staging/.gitkeep
 !reports/.gitkeep
 .env
+
+.env
+.env.*
+!.env.example
