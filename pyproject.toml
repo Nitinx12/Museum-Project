@@ -8,4 +8,5 @@ dependencies = [
     "pandas>=3.0.3",
     "pymongo>=4.17.0",
     "python-dotenv>=1.2.2",
+    "sqlalchemy>=2.0.50",
 ]
