@@ -1,7 +1,0 @@
-{
-  "table": "museum",
-  "ts_col": "updated_at",
-  "last_watermark": null,
-  "last_run": "2026-06-09T22:12:18",
-  "rows_loaded": 57
-}

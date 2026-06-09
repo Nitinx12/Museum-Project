@@ -29,11 +29,11 @@ Flow:
       Incremental — NAMED collection(s) only, watermark applied
 
   python -m scripts.extraction.extract --full-refresh
-      Full refresh — ALL collections, drop all tables,
+      Full refresh — ALL collections, truncate all tables,
       reset all watermarks, reload everything from scratch
 
   python -m scripts.extraction.extract --collection artist --full-refresh
-      Full refresh — NAMED collection(s) only, drop those
+      Full refresh — NAMED collection(s) only, truncate those
       tables, reset their watermarks, reload from scratch
 ───────────────────────────────────────────────────────────────
 """
@@ -93,7 +93,7 @@ from utils.logger import get_logger
 ETL_SCHEMA    = os.getenv("ETL_SCHEMA",    "bronze")
 ETL_TS_COL    = os.getenv("ETL_TS_COL",   "updated_at")
 ETL_PK_COL    = os.getenv("ETL_PK_COL",   "id")
-WATERMARK_DIR = Path(os.getenv("WATERMARK_DIR", "watermark"))
+WATERMARK_DIR = Path(os.getenv("WATERMARK_DIR", "watermark/extract"))
 
 # Per-collection primary key mapping.
 # Used for ON CONFLICT DO UPDATE (upsert) during the bronze merge.
@@ -127,6 +127,7 @@ if not Path(JDBC_JAR_PATH).is_file():
         "       set JDBC_JAR_PATH=C:\\path\\to\\postgresql-42.7.3.jar   (Windows)\n"
         "       export JDBC_JAR_PATH=/path/to/postgresql-42.7.3.jar    (Linux/Mac)\n"
     )
+
 
 ISO_FMT = "%Y-%m-%dT%H:%M:%S"
 
@@ -177,9 +178,9 @@ def reset_watermark(table: str, log) -> None:
     path = _watermark_path(table)
     if path.exists():
         path.unlink()
-        log.info("WATERMARK RESET : watermark/%s.json deleted", table)
+        log.info("WATERMARK RESET : watermark/extract/%s.json deleted", table)
     else:
-        log.info("WATERMARK RESET : watermark/%s.json not found (already clean)", table)
+        log.info("WATERMARK RESET : watermark/extract/%s.json not found (already clean)", table)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Helpers
@@ -222,19 +223,34 @@ def get_spark(app_name: str = "MuseumETL") -> SparkSession:
 
     os.environ["PYSPARK_PYTHON"] = os.getenv("PYSPARK_PYTHON", sys.executable)
     os.environ["PYSPARK_DRIVER_PYTHON"] = os.getenv("PYSPARK_DRIVER_PYTHON", sys.executable)
-    return (
+
+    # Suppress "WARNING: Using incubator modules: jdk.incubator.vector"
+    # Spark uses the Java Vector API internally; explicitly declaring the module
+    # via --add-modules tells the JVM it is intentional and silences the warning.
+    _jvm_opts = "--add-modules jdk.incubator.vector"
+
+    spark = (
         SparkSession.builder
         .appName(app_name)
         .master("local[*]")
         # Use extraClassPath instead of spark.jars so Spark does not try to
         # chmod/distribute the JAR via fetchFile -- that requires winutils.exe
         # on Windows and fails with FileNotFoundException in local mode.
-        .config("spark.driver.extraClassPath", JDBC_JAR_PATH)
-        .config("spark.executor.extraClassPath", JDBC_JAR_PATH)
+        .config("spark.driver.extraClassPath",     JDBC_JAR_PATH)
+        .config("spark.executor.extraClassPath",   JDBC_JAR_PATH)
+        .config("spark.driver.extraJavaOptions",   _jvm_opts)
+        .config("spark.executor.extraJavaOptions", _jvm_opts)
         .config("spark.sql.legacy.timeParserPolicy", "LEGACY")
         .config("spark.driver.memory", "2g")
+        # Suppress "Using Spark's default log4j profile" +
+        # "Setting default log level to WARN" startup noise.
+        .config("spark.logConf", "false")
         .getOrCreate()
     )
+
+    # Silence log4j startup banner — must be set after session creation.
+    spark.sparkContext.setLogLevel("WARN")
+    return spark
 
 # ─────────────────────────────────────────────────────────────────────────────
 # MongoDB read
@@ -246,6 +262,11 @@ def read_mongo_collection(
     """
     Read a full MongoDB collection via PyMongo.
     Drops _id (not JDBC-serializable), slugifies column names.
+
+    FIX: .astype(str) was converting Python None → the string "None",
+    which landed in Postgres as the text literal 'None' instead of NULL.
+    Now we only cast non-null values; actual None/NaN stay as NaN so
+    Spark serialises them as SQL NULL over JDBC.
     """
     try:
         client = MongoClient(MONGO_URI)
@@ -313,7 +334,10 @@ def apply_watermark_filter(
 
 
 def compute_new_max_ts(sdf: DataFrame, ts_col: str) -> str | None:
-    """Return ISO max timestamp from the processed batch."""
+    """Return ISO max timestamp from the processed batch.
+    Called only when rows_new > 0, so isEmpty() check is redundant
+    and wasteful (triggers a full Spark job). Removed.
+    """
     if ts_col not in sdf.columns:
         return None
     row = sdf.agg(
@@ -339,7 +363,9 @@ def ensure_bronze_table(
     or UNIQUE on _row_hash (no-PK collections).
 
     Also adds any columns that exist in the incoming data but are missing
-    from the existing table (schema evolution).
+    from the existing table (schema evolution). Without this the JDBC staging
+    write succeeds but the INSERT…SELECT merge fails with 'column X does not
+    exist' the first time MongoDB gains a new field.
     """
     col_defs = ",\n    ".join(f'"{c}" TEXT' for c in columns)
 
@@ -426,11 +452,11 @@ def drop_staging(conn, schema: str, staging: str, log) -> None:
 
 
 def truncate_bronze_table(conn, schema: str, table: str, log) -> None:
-    """DROP the bronze table before a full-refresh load so constraints rebuild cleanly.
+    """TRUNCATE the bronze table before a full-refresh load.
     Used so that a full reload starts clean and doesn't accumulate
-    stale rows from a previous run or maintain broken constraints."""
-    conn.execute(text(f'DROP TABLE IF EXISTS "{schema}"."{table}" CASCADE'))
-    log.info("DROPPED → %s.%s  (full-refresh)", schema, table)
+    stale rows from a previous run."""
+    conn.execute(text(f'TRUNCATE TABLE "{schema}"."{table}" RESTART IDENTITY'))
+    log.info("TRUNCATED → %s.%s  (full-refresh)", schema, table)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Core extraction function
@@ -458,7 +484,7 @@ def extract_collection(
             collection,
         )
 
-    # Unique staging name per run — prevents parallel collection runs
+    # FIX: unique staging name per run — prevents parallel collection runs
     # from clobbering each other's staging table.
     run_id  = datetime.now().strftime("%Y%m%d%H%M%S")
     staging = _staging_name(table, run_id)
@@ -525,13 +551,15 @@ def extract_collection(
             rows_new = sdf_new.count()
             base["rows_new"] = rows_new
 
-    # 3e. Row-hash dedup for no-PK collections or missing PKs.
+    # 3e. Row-hash dedup for no-PK collections.
     # Computes MD5 of all data columns (excluding loaded_at which changes
-    # every run) and adds a _row_hash column.
-    if pk_col is None or pk_col not in columns:
+    # every run) and adds a _row_hash column.  The bronze table has a
+    # UNIQUE constraint on _row_hash, so ON CONFLICT DO NOTHING silently
+    # skips any row that already exists — no duplicates ever.
+    if pk_col is None:
         sdf_new = _add_row_hash(sdf_new, exclude_cols=["loaded_at"])
         columns = sdf_new.columns   # refresh — _row_hash is now included
-        log.info("ROW HASH : added _row_hash column for no-PK dedup (or missing PK)")
+        log.info("ROW HASH : added _row_hash column for no-PK dedup")
 
     # 3b. Ensure bronze schema exists before the JDBC write.
     # ensure_schema is also called in step 5, but Spark's JDBC writer needs
@@ -556,7 +584,7 @@ def extract_collection(
             .option("user",     POSTGRES_USERNAME)
             .option("password", POSTGRES_PASSWORD)
             .option("driver",   "org.postgresql.Driver")
-            # Explicit batch sizes — default is 1 row/roundtrip on some
+            # FIX: explicit batch sizes — default is 1 row/roundtrip on some
             # driver versions, which makes large writes extremely slow.
             .option("batchsize",  "5000")
             .option("numPartitions", "4")
@@ -575,16 +603,14 @@ def extract_collection(
         with engine.connect() as conn:
             with conn.begin():
                 ensure_schema(conn, schema, log)
-                
-                # Full-refresh: drop the table completely before rebuilding 
-                # so we get clean, updated constraints.
-                if full_load:
-                    truncate_bronze_table(conn, schema, table, log)
-                    
                 ensure_bronze_table(
                     conn, schema, table, list(columns), pk_col, log
                 )
-                
+                # Full-refresh: wipe the target before inserting so we don't
+                # accumulate stale rows or hit duplicate-key errors from a
+                # previous partial run.
+                if full_load:
+                    truncate_bronze_table(conn, schema, table, log)
                 rows_loaded = merge_staging_to_bronze(
                     conn, schema, table, staging, list(columns), pk_col, log
                 )
@@ -610,7 +636,7 @@ def extract_collection(
         new_max = compute_new_max_ts(sdf_new, ts_col)
         save_watermark(table, ts_col, new_max, rows_loaded)
         log.info(
-            "WATERMARK SAVED : watermark/%s.json  (new_max=%s)", table, new_max
+            "WATERMARK SAVED : watermark/extract/%s.json  (new_max=%s)", table, new_max
         )
 
     # ── 7. Summary ────────────────────────────────────────────
@@ -629,6 +655,9 @@ def main(collections: list[str], full_load: bool = False) -> None:
     log = get_logger(stage="extraction", name="mongo_main")
 
     # Auto-discover all collections if none specified
+    # FIX: kept as PyMongo list_collection_names() (correct) — previous version
+    # also had a Spark-based _list_all_collections() using system.namespaces
+    # which was removed in MongoDB 4.4+ and fails on Atlas entirely.
     if not collections:
         with MongoClient(MONGO_URI) as client:
             collections = client[MONGO_DB].list_collection_names()
@@ -636,9 +665,9 @@ def main(collections: list[str], full_load: bool = False) -> None:
 
     log.info("Collections : %d", len(collections))
     if full_load and collections:
-        log.info("Mode        : FULL REFRESH (drop+reload) — collections: %s", collections)
+        log.info("Mode        : FULL REFRESH (truncate+reload) — collections: %s", collections)
     elif full_load:
-        log.info("Mode        : FULL REFRESH (drop+reload) — ALL collections")
+        log.info("Mode        : FULL REFRESH (truncate+reload) — ALL collections")
     elif collections:
         log.info("Mode        : INCREMENTAL — collections: %s", collections)
     else:
@@ -694,7 +723,7 @@ if __name__ == "__main__":
     _argv = sys.argv[1:]
 
     # ── Mode flag ─────────────────────────────────────────────────────────────
-    # --full-refresh  drop target table(s), reset watermark(s), reload all
+    # --full-refresh  truncate target table(s), reset watermark(s), reload all
     # --full-load     legacy alias for --full-refresh (kept for back-compat)
     _full_load = "--full-load" in _argv or "--full-refresh" in _argv
 
