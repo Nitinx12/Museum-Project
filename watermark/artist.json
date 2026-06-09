@@ -1,0 +1,7 @@
+{
+  "table": "artist",
+  "ts_col": "updated_at",
+  "last_watermark": null,
+  "last_run": "2026-06-09T22:16:07",
+  "rows_loaded": 421
+}

@@ -1,0 +1,7 @@
+{
+  "table": "museum_hours",
+  "ts_col": "updated_at",
+  "last_watermark": null,
+  "last_run": "2026-06-09T22:12:42",
+  "rows_loaded": 351
+}

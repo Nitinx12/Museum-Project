@@ -1,0 +1,7 @@
+{
+  "table": "subject",
+  "ts_col": "updated_at",
+  "last_watermark": null,
+  "last_run": "2026-06-09T22:13:07",
+  "rows_loaded": 6771
+}

@@ -1,0 +1,7 @@
+{
+  "table": "product_size",
+  "ts_col": "updated_at",
+  "last_watermark": null,
+  "last_run": "2026-06-09T22:15:22",
+  "rows_loaded": 110347
+}

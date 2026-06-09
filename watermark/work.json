@@ -1,0 +1,7 @@
+{
+  "table": "work",
+  "ts_col": "updated_at",
+  "last_watermark": null,
+  "last_run": "2026-06-09T22:14:56",
+  "rows_loaded": 14716
+}
