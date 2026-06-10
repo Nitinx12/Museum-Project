@@ -88,8 +88,177 @@ models:
       - name: loaded_at
         tests:
           - not_null
-          
+
       - name: silver_loaded_at
         tests:
           - not_null
+
+# ==================================================
+# Museum_hours
+# ==================================================
+  - name: museum_hours
+    description: "cleaned Museum_hours tables for silver layer"
+    columns:
+      
+      # Primary key
+      - name: museum_id
+        tests:
+          - not_null
+      
+      - name: day
+        description: "Day of the week."
+        tests:
+          - not_null
+          - accepted_values:
+              config:
+                severity: error
+              values: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+      
+      - name: open_time
+        tests:
+          - not_null
+      
+      - name: close_time
+        tests:
+          - not_null
+
+      - name: updated_at
+        tests:
+          - not_null
+ 
+      - name: silver_loaded_at
+        tests:
+          - not_null
+
+# ==================================================
+# Museum
+# ==================================================
+  - name: museum
+    description: "Cleaned museum data with corrected city, state and postal fields."
+    columns:
+ 
+      # Primary key
+      - name: museum_id
+        description: "Unique identifier for each museum."
+        tests:
+          - unique
+          - not_null
+ 
+      - name: museum_name
+        description: "Name of the museum."
+        tests:
+          - not_null
+ 
+      - name: city
+        description: "City where the museum is located."
+        tests:
+          - not_null
+ 
+      - name: state
+        description: "State or province. NULL for museums in countries without states."
+ 
+      - name: postal
+        description: "Postal code. NULL for some international museums."
+ 
+      - name: country
+        description: "Country where the museum is located."
+        tests:
+          - not_null
+ 
+      - name: address
+        description: "Street address of the museum."
+        tests:
+          - not_null
+ 
+      - name: phone
+        description: "Contact phone number."
+        tests:
+          - unique
+          - not_null
+ 
+      - name: url
+        description: "Website URL of the museum."
+        tests:
+          - unique
+          - not_null
+ 
+      - name: updated_at
+        description: "When the record was last updated."
+        tests:
+          - not_null
+ 
+      - name: loaded_at
+        description: "When the record was loaded into bronze."
+        tests:
+          - not_null
+ 
+      - name: silver_loaded_at
+        description: "When the record was loaded into silver."
+        tests:
+          - not_null
+
+# ==================================================
+# Product_size
+# ==================================================
+  - name: product_size
+    description: "cleaned product_size table data for silver layer"
+    columns:
+
+      - name: work_id
+        tests:
+          - not_null
+      
+      - name: size_id
+        tests:
+          - not_null
+
+      - name: sale_price
+        tests:
+          - not_null
+          - not_negative
+      
+      - name: regular_price
+        tests:
+          - not_null
+          - not_negative
+      
+      - name: updated_at
+        tests:
+          - not_null
+
+      - name: loaded_at
+        tests:
+          - not_null
+      
+      - name: silver_loaded_at
+        tests:
+          - not_null
+        
+# ==================================================
+# Product_size
+# ==================================================
+  - name: subject
+    description: "cleaned product_size table data for silver layer"
+    columns:
+
+      - name: work_id
+        tests:
+          - not_null
+      
+      - name: subject
+        tests:
+          - not_null
+      
+      - name: updated_at
+        tests:
+          - not_null
+
+      - name: loaded_at
+        tests:
+          - not_null
+      
+      - name: silver_loaded_at
+        tests:
+          - not_null
+
 
