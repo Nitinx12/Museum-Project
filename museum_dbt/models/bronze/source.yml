@@ -6,7 +6,7 @@ sources:
     description: "This source contains the raw data from the source system."
 
     tables:
-      - name: artists
+      - name: artist
         description: "This table contains the raw data of artists from the source system."
       - name: canvas_size
         description: "This table contains the raw data of canvas sizes from the source system."

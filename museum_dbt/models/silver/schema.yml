@@ -1,0 +1,246 @@
+version: 2
+
+models:
+# ==================================================
+# Artists
+# ==================================================
+  - name: artist
+    description: "This table contains the cleaned data of artists."
+    columns:
+
+      # Primary key
+      - name: artist_id
+        description: "The unique identifier for each artist."
+        tests:
+          - unique
+          - not_null
+
+      - name: artist_name
+        description: "The name of the artist."
+        tests:
+          - not_null
+        
+      - name: nationality
+        description: "nationality of artist"
+        tests:
+          - not_null
+      
+      - name: style
+        description: "artist style"
+        tests:
+          - not_null
+          
+      - name: birth_year
+        description: "artist born year"
+        tests:
+          - not_null
+      
+      - name: death_year
+        description: "death year of artist"
+        tests:
+          - not_null
+      
+      - name: updated_at
+        description: "columns when last updated"
+        tests:
+          - not_null
+      
+      - name: loaded_at
+        description: "last loaded"
+        tests:
+          - not_null
+      
+      - name: silver_loaded_at
+        description: "silver layer loaded artist"
+        tests:
+          - not_null
+
+# ==================================================
+# Museum Hours
+# ==================================================
+  - name: museum_hours
+    description: "Cleaned opening hours for each museum by day."
+    columns:
+
+      # Composite primary key
+      - name: museum_id
+        description: "The unique identifier for each museum."
+        tests:
+          - not_null
+
+      - name: day
+        description: "Day of the week."
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+
+      - name: open_time
+        description: "Opening time of the museum."
+        tests:
+          - not_null
+
+      - name: close_time
+        description: "Closing time of the museum."
+        tests:
+          - not_null
+
+      - name: updated_at
+        description: "When the record was last updated."
+        tests:
+          - not_null
+
+      - name: silver_loaded_at
+        description: "When the record was loaded into silver."
+        tests:
+          - not_null
+
+
+# ==================================================
+# Museum
+# ==================================================
+  - name: museum
+    description: "Cleaned museum data with corrected city, state and postal fields."
+    columns:
+
+      # Primary key
+      - name: museum_id
+        description: "Unique identifier for each museum."
+        tests:
+          - unique
+          - not_null
+
+      - name: museum_name
+        description: "Name of the museum."
+        tests:
+          - not_null
+
+      - name: city
+        description: "City where the museum is located."
+        tests:
+          - not_null
+
+      - name: state
+        description: "State or province. NULL for museums in countries without states."
+
+      - name: postal
+        description: "Postal code. NULL for some international museums."
+
+      - name: country
+        description: "Country where the museum is located."
+        tests:
+          - not_null
+
+      - name: address
+        description: "Street address of the museum."
+        tests:
+          - not_null
+
+      - name: phone
+        description: "Contact phone number."
+
+      - name: url
+        description: "Website URL of the museum."
+
+      - name: updated_at
+        description: "When the record was last updated."
+        tests:
+          - not_null
+
+      - name: loaded_at
+        description: "When the record was loaded into bronze."
+        tests:
+          - not_null
+
+      - name: silver_loaded_at
+        description: "When the record was loaded into silver."
+        tests:
+          - not_null
+
+
+# ==================================================
+# Product Size
+# ==================================================
+  - name: product_size
+    description: "Cleaned pricing data per artwork and canvas size combination."
+    columns:
+
+      # Composite primary key
+      - name: work_id
+        description: "Identifier for the artwork."
+        tests:
+          - not_null
+
+      - name: size_id
+        description: "Identifier for the canvas size."
+        tests:
+          - not_null
+
+      - name: sale_price
+        description: "Discounted sale price of the artwork."
+        tests:
+          - not_null
+          - not_negative
+
+      - name: regular_price
+        description: "Regular price of the artwork."
+        tests:
+          - not_null
+          - not_negative
+
+      - name: updated_at
+        description: "When the record was last updated. NULL if not provided by source."
+
+      - name: loaded_at
+        description: "When the record was loaded into bronze."
+        tests:
+          - not_null
+
+      - name: silver_loaded_at
+        description: "When the record was loaded into silver."
+        tests:
+          - not_null
+
+
+# ==================================================
+# Work
+# ==================================================
+  - name: work
+    description: "Cleaned artwork data with artist, style and museum references."
+    columns:
+
+      # Primary key
+      - name: work_id
+        description: "Unique identifier for each artwork."
+        tests:
+          - unique
+          - not_null
+
+      - name: name
+        description: "Title of the artwork."
+        tests:
+          - not_null
+
+      - name: artist_id
+        description: "Foreign key to artist. NULL if artist is unknown."
+
+      - name: style
+        description: "Artistic style of the work. NULL if not categorised."
+
+      - name: museum_id
+        description: "Foreign key to museum. NULL if museum is unknown."
+
+      - name: updated_at
+        description: "When the record was last updated."
+        tests:
+          - not_null
+
+      - name: loaded_at
+        description: "When the record was loaded into bronze."
+        tests:
+          - not_null
+
+      - name: silver_loaded_at
+        description: "When the record was loaded into silver."
+        tests:
+          - not_null

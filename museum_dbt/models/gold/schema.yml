@@ -1,0 +1,240 @@
+version: 2
+
+models:
+
+  # ─────────────────────────────────────────────
+  # FACT TABLE
+  # ─────────────────────────────────────────────
+  - name: fct_sales
+    description: >
+      One row per artwork × canvas-size combination.
+      Central fact table for pricing, discount, and museum-placement analysis.
+    columns:
+      - name: sales_key
+        description: Surrogate primary key (work_id + size_id).
+        tests:
+          - unique
+          - not_null
+
+      - name: work_id
+        description: FK to dim_artwork.
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_artwork')
+              field: work_id
+
+      - name: artist_id
+        description: FK to dim_artist (may be NULL for unattributed works).
+        tests:
+          - relationships:
+              to: ref('dim_artist')
+              field: artist_id
+              where: "artist_id is not null"
+
+      - name: museum_id
+        description: FK to dim_museum (NULL if artwork is not on display).
+        tests:
+          - relationships:
+              to: ref('dim_museum')
+              field: museum_id
+              where: "museum_id is not null"
+
+      - name: size_id
+        description: FK to dim_canvas_size.
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_canvas_size')
+              field: size_id
+
+      - name: sale_price
+        description: Discounted sale price in source currency.
+        tests:
+          - not_null
+
+      - name: regular_price
+        description: Full list price in source currency.
+        tests:
+          - not_null
+
+      - name: discount_amount
+        description: regular_price minus sale_price.
+
+      - name: discount_pct
+        description: Discount as a percentage of regular_price.
+
+      - name: is_in_museum
+        description: TRUE when the artwork is assigned to a museum.
+        tests:
+          - accepted_values:
+              values: [true, false]
+
+      - name: gold_loaded_at
+        description: Timestamp when this row was loaded into the gold layer.
+        tests:
+          - not_null
+
+  # ─────────────────────────────────────────────
+  # DIMENSIONS
+  # ─────────────────────────────────────────────
+  - name: dim_artwork
+    description: >
+      One row per artwork. Includes style, aggregated subject tags,
+      and FK references to artist and museum.
+    columns:
+      - name: work_id
+        description: Primary key.
+        tests:
+          - unique
+          - not_null
+
+      - name: artwork_name
+        description: Title of the artwork.
+        tests:
+          - not_null
+
+      - name: style
+        description: Artistic style (e.g. Impressionism). NULL if unknown.
+
+      - name: subject_tags
+        description: >
+          Comma-separated list of subject tags from the subject table.
+          Defaults to 'Unknown' when no tags exist.
+        tests:
+          - not_null
+
+      - name: artist_id
+        description: FK to dim_artist.
+
+      - name: museum_id
+        description: FK to dim_museum.
+
+  - name: dim_artist
+    description: >
+      One row per artist. Enriched with computed era bucket and
+      artist status (Historical vs Living / Unknown).
+    columns:
+      - name: artist_id
+        description: Primary key.
+        tests:
+          - unique
+          - not_null
+
+      - name: artist_name
+        description: Full name (first + middle + last).
+        tests:
+          - not_null
+
+      - name: nationality
+        description: Artist nationality. Defaults to 'Unknown'.
+        tests:
+          - not_null
+
+      - name: style
+        description: Artist's primary style. Defaults to 'Unknown'.
+        tests:
+          - not_null
+
+      - name: birth_year
+        description: Year of birth (INT). NULL if unknown.
+
+      - name: death_year
+        description: Year of death (INT). NULL if living or unknown.
+
+      - name: era
+        description: Computed era bucket based on birth_year.
+        tests:
+          - not_null
+          - accepted_values:
+              values:
+                - Medieval & Earlier
+                - Renaissance
+                - Baroque & Rococo
+                - Neoclassical & Romantic
+                - Impressionist Era
+                - Modern
+                - Contemporary
+                - Unknown
+
+      - name: artist_status
+        description: Historical (deceased) or Living / Unknown.
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['Historical', 'Living / Unknown']
+
+  - name: dim_museum
+    description: >
+      One row per museum. Enriched with aggregated opening-hours stats:
+      days open per week, average daily hours, weekend flag.
+    columns:
+      - name: museum_id
+        description: Primary key.
+        tests:
+          - unique
+          - not_null
+
+      - name: museum_name
+        description: Full name of the museum.
+        tests:
+          - not_null
+
+      - name: city
+        description: City where the museum is located. Defaults to 'Unknown'.
+        tests:
+          - not_null
+
+      - name: country
+        description: Country. Defaults to 'Unknown'.
+        tests:
+          - not_null
+
+      - name: opening_days_per_week
+        description: Number of days per week the museum is open (0 if no hours loaded).
+        tests:
+          - not_null
+
+      - name: avg_daily_open_hours
+        description: Average hours open per operating day. NULL if no hours loaded.
+
+      - name: earliest_open_time
+        description: Earliest opening time across all operating days.
+
+      - name: latest_close_time
+        description: Latest closing time across all operating days.
+
+      - name: is_open_weekends
+        description: TRUE if open on Saturday or Sunday. NULL if no hours data.
+
+  - name: dim_canvas_size
+    description: >
+      One row per canvas size. Enriched with computed area and
+      a size_category bucket (Small / Medium / Large / Extra Large).
+    columns:
+      - name: size_id
+        description: Primary key.
+        tests:
+          - unique
+          - not_null
+
+      - name: label
+        description: Human-readable size label. Defaults to 'Unknown'.
+        tests:
+          - not_null
+
+      - name: width_inches
+        description: Canvas width in inches.
+
+      - name: height_inches
+        description: Canvas height in inches.
+
+      - name: area_sq_inches
+        description: width_inches × height_inches. NULL when either dimension is missing.
+
+      - name: size_category
+        description: Bucketed size label for BI grouping.
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['Small', 'Medium', 'Large', 'Extra Large', 'Unknown']
