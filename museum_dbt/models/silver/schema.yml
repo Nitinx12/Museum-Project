@@ -1,0 +1,56 @@
+version: 2
+
+models:
+# ==================================================
+# Artists
+# ==================================================
+  - name: artist
+    description: "This table contains the cleaned data of artists."
+    columns:
+
+      # Primary key
+      - name: artist_id
+        description: "The unique identifier for each artist."
+        tests:
+          - unique
+          - not_null
+
+      - name: artist_name
+        description: "The name of the artist."
+        tests:
+          - not_null
+        
+      - name: nationality
+        description: "nationality of artist"
+        tests:
+          - not_null
+      
+      - name: style
+        description: "artist style"
+        tests:
+          - not_null
+          
+      - name: birth_year
+        description: "artist born year"
+        tests:
+          - not_null
+      
+      - name: death_year
+        description: "death year of artist"
+        tests:
+          - not_null
+      
+      - name: updated_at
+        description: "columns when last updated"
+        tests:
+          - not_null
+      
+      - name: loaded_at
+        description: "last loaded"
+        tests:
+          - not_null
+      
+      - name: silver_loaded_at
+        description: "silver layer loaded artist"
+        tests:
+          - not_null
