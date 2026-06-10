@@ -56,6 +56,7 @@ models:
           - not_null
 
 # ==================================================
+<<<<<<< HEAD
 # Museum Hours
 # ==================================================
   - name: museum_hours
@@ -68,11 +69,63 @@ models:
         tests:
           - not_null
 
+=======
+# Canvas_size
+# ==================================================
+  - name: canvas_size
+    description: "Cleaned canvas size reference data."
+    columns:
+      
+      # Primary key
+      - name: size_id
+        tests:
+          - unique
+          - not_null
+
+      - name: width_inches
+        tests:
+          - not_null
+      - name: height_inches
+        description: "Height in inches. NULL for Long Edge single-dimension sizes."
+        tests:
+          - not_null:
+              severity: warn
+              
+      - name: label
+        tests:
+          - not_null
+
+      - name: updated_at
+        tests:
+          - not_null
+
+      - name: loaded_at
+        tests:
+          - not_null
+
+      - name: silver_loaded_at
+        tests:
+          - not_null
+
+# ==================================================
+# Museum_hours
+# ==================================================
+  - name: museum_hours
+    description: "cleaned Museum_hours tables for silver layer"
+    columns:
+      
+      # Primary key
+      - name: museum_id
+        tests:
+          - not_null
+      
+>>>>>>> feature/dbt-silver-layer
       - name: day
         description: "Day of the week."
         tests:
           - not_null
           - accepted_values:
+<<<<<<< HEAD
               values: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
 
       - name: open_time
@@ -82,10 +135,22 @@ models:
 
       - name: close_time
         description: "Closing time of the museum."
+=======
+              config:
+                severity: error
+              values: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+      
+      - name: open_time
+        tests:
+          - not_null
+      
+      - name: close_time
+>>>>>>> feature/dbt-silver-layer
         tests:
           - not_null
 
       - name: updated_at
+<<<<<<< HEAD
         description: "When the record was last updated."
         tests:
           - not_null
@@ -96,29 +161,51 @@ models:
           - not_null
 
 
+=======
+        tests:
+          - not_null
+ 
+      - name: silver_loaded_at
+        tests:
+          - not_null
+
+>>>>>>> feature/dbt-silver-layer
 # ==================================================
 # Museum
 # ==================================================
   - name: museum
     description: "Cleaned museum data with corrected city, state and postal fields."
     columns:
+<<<<<<< HEAD
 
+=======
+ 
+>>>>>>> feature/dbt-silver-layer
       # Primary key
       - name: museum_id
         description: "Unique identifier for each museum."
         tests:
           - unique
           - not_null
+<<<<<<< HEAD
 
+=======
+ 
+>>>>>>> feature/dbt-silver-layer
       - name: museum_name
         description: "Name of the museum."
         tests:
           - not_null
+<<<<<<< HEAD
 
+=======
+ 
+>>>>>>> feature/dbt-silver-layer
       - name: city
         description: "City where the museum is located."
         tests:
           - not_null
+<<<<<<< HEAD
 
       - name: state
         description: "State or province. NULL for museums in countries without states."
@@ -126,15 +213,29 @@ models:
       - name: postal
         description: "Postal code. NULL for some international museums."
 
+=======
+ 
+      - name: state
+        description: "State or province. NULL for museums in countries without states."
+ 
+      - name: postal
+        description: "Postal code. NULL for some international museums."
+ 
+>>>>>>> feature/dbt-silver-layer
       - name: country
         description: "Country where the museum is located."
         tests:
           - not_null
+<<<<<<< HEAD
 
+=======
+ 
+>>>>>>> feature/dbt-silver-layer
       - name: address
         description: "Street address of the museum."
         tests:
           - not_null
+<<<<<<< HEAD
 
       - name: phone
         description: "Contact phone number."
@@ -142,21 +243,45 @@ models:
       - name: url
         description: "Website URL of the museum."
 
+=======
+ 
+      - name: phone
+        description: "Contact phone number."
+        tests:
+          - unique
+          - not_null
+ 
+      - name: url
+        description: "Website URL of the museum."
+        tests:
+          - unique
+          - not_null
+ 
+>>>>>>> feature/dbt-silver-layer
       - name: updated_at
         description: "When the record was last updated."
         tests:
           - not_null
+<<<<<<< HEAD
 
+=======
+ 
+>>>>>>> feature/dbt-silver-layer
       - name: loaded_at
         description: "When the record was loaded into bronze."
         tests:
           - not_null
+<<<<<<< HEAD
 
+=======
+ 
+>>>>>>> feature/dbt-silver-layer
       - name: silver_loaded_at
         description: "When the record was loaded into silver."
         tests:
           - not_null
 
+<<<<<<< HEAD
 
 # ==================================================
 # Product Size
@@ -173,10 +298,25 @@ models:
 
       - name: size_id
         description: "Identifier for the canvas size."
+=======
+# ==================================================
+# Product_size
+# ==================================================
+  - name: product_size
+    description: "cleaned product_size table data for silver layer"
+    columns:
+
+      - name: work_id
+        tests:
+          - not_null
+      
+      - name: size_id
+>>>>>>> feature/dbt-silver-layer
         tests:
           - not_null
 
       - name: sale_price
+<<<<<<< HEAD
         description: "Discounted sale price of the artwork."
         tests:
           - not_null
@@ -204,22 +344,83 @@ models:
 
 # ==================================================
 # Work
+=======
+        tests:
+          - not_null
+          - not_negative
+      
+      - name: regular_price
+        tests:
+          - not_null
+          - not_negative
+      
+      - name: updated_at
+        tests:
+          - not_null
+
+      - name: loaded_at
+        tests:
+          - not_null
+      
+      - name: silver_loaded_at
+        tests:
+          - not_null
+        
+# ==================================================
+# Product_size
+# ==================================================
+  - name: subject
+    description: "cleaned product_size table data for silver layer"
+    columns:
+
+      - name: work_id
+        tests:
+          - not_null
+      
+      - name: subject
+        tests:
+          - not_null
+      
+      - name: updated_at
+        tests:
+          - not_null
+
+      - name: loaded_at
+        tests:
+          - not_null
+      
+      - name: silver_loaded_at
+        tests:
+          - not_null
+
+# ==================================================
+# work
+>>>>>>> feature/dbt-silver-layer
 # ==================================================
   - name: work
     description: "Cleaned artwork data with artist, style and museum references."
     columns:
+<<<<<<< HEAD
 
+=======
+ 
+>>>>>>> feature/dbt-silver-layer
       # Primary key
       - name: work_id
         description: "Unique identifier for each artwork."
         tests:
           - unique
           - not_null
+<<<<<<< HEAD
 
+=======
+ 
+>>>>>>> feature/dbt-silver-layer
       - name: name
         description: "Title of the artwork."
         tests:
           - not_null
+<<<<<<< HEAD
 
       - name: artist_id
         description: "Foreign key to artist. NULL if artist is unknown."
@@ -230,17 +431,43 @@ models:
       - name: museum_id
         description: "Foreign key to museum. NULL if museum is unknown."
 
+=======
+ 
+      - name: artist_id
+        description: "Foreign key to artist. NULL if artist is unknown."
+ 
+      - name: style
+        description: "Artistic style of the work. NULL if not categorised."
+ 
+      - name: museum_id
+        description: "Foreign key to museum. NULL if museum is unknown."
+ 
+>>>>>>> feature/dbt-silver-layer
       - name: updated_at
         description: "When the record was last updated."
         tests:
           - not_null
+<<<<<<< HEAD
 
+=======
+ 
+>>>>>>> feature/dbt-silver-layer
       - name: loaded_at
         description: "When the record was loaded into bronze."
         tests:
           - not_null
+<<<<<<< HEAD
 
       - name: silver_loaded_at
         description: "When the record was loaded into silver."
         tests:
           - not_null
+=======
+ 
+      - name: silver_loaded_at
+        description: "When the record was loaded into silver."
+        tests:
+          - not_null
+
+
+>>>>>>> feature/dbt-silver-layer
