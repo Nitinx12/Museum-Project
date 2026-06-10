@@ -261,4 +261,47 @@ models:
         tests:
           - not_null
 
+# ==================================================
+# work
+# ==================================================
+  - name: work
+    description: "Cleaned artwork data with artist, style and museum references."
+    columns:
+ 
+      # Primary key
+      - name: work_id
+        description: "Unique identifier for each artwork."
+        tests:
+          - unique
+          - not_null
+ 
+      - name: name
+        description: "Title of the artwork."
+        tests:
+          - not_null
+ 
+      - name: artist_id
+        description: "Foreign key to artist. NULL if artist is unknown."
+ 
+      - name: style
+        description: "Artistic style of the work. NULL if not categorised."
+ 
+      - name: museum_id
+        description: "Foreign key to museum. NULL if museum is unknown."
+ 
+      - name: updated_at
+        description: "When the record was last updated."
+        tests:
+          - not_null
+ 
+      - name: loaded_at
+        description: "When the record was loaded into bronze."
+        tests:
+          - not_null
+ 
+      - name: silver_loaded_at
+        description: "When the record was loaded into silver."
+        tests:
+          - not_null
+
 
