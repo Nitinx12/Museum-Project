@@ -1,0 +1,22 @@
+version: 2
+sources:
+  - name: bronze
+    database: Museum
+    schema: bronze
+    description: "This source contains the raw data from the source system."
+
+    tables:
+      - name: artists
+        description: "This table contains the raw data of artists from the source system."
+      - name: canvas_size
+        description: "This table contains the raw data of canvas sizes from the source system."
+      - name: museum_hours
+        description: "This table contains the raw data of museum hours from the source system." 
+      - name: museum
+        description: "This table contains the raw data of museums from the source system."
+      - name: product_size
+        description: "This table contains the raw data of product sizes from the source system."
+      - name: subject
+        description: "This table contains the raw data of subjects from the source system."
+      - name: work
+        description: "This table contains the raw data of works from the source system."

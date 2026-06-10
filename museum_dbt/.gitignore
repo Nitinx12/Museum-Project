@@ -1,4 +1,4 @@
-
+# Ignore the target directory where dbt builds compiled SQL and artifacts
 target/
 dbt_packages/
 logs/
