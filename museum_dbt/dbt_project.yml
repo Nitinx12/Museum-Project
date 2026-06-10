@@ -14,21 +14,12 @@ clean-targets:
   - "target"
   - "dbt_packages"
 
-<<<<<<< HEAD
-=======
-
->>>>>>> feature/dbt-silver-layer
 models:
   museum_dbt:
     silver:
       +schema: silver
-<<<<<<< HEAD
       +materialized: table
 
     gold:
       +schema: gold
       +materialized: table
-=======
-    # gold:
-    #   +schema: gold 
->>>>>>> feature/dbt-silver-layer
