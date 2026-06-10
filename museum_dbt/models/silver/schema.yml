@@ -54,3 +54,42 @@ models:
         description: "silver layer loaded artist"
         tests:
           - not_null
+
+# ==================================================
+# Canvas_size
+# ==================================================
+  - name: canvas_size
+    description: "Cleaned canvas size reference data."
+    columns:
+      
+      # Primary key
+      - name: size_id
+        tests:
+          - unique
+          - not_null
+
+      - name: width_inches
+        tests:
+          - not_null
+      - name: height_inches
+        description: "Height in inches. NULL for Long Edge single-dimension sizes."
+        tests:
+          - not_null:
+              severity: warn
+              
+      - name: label
+        tests:
+          - not_null
+
+      - name: updated_at
+        tests:
+          - not_null
+
+      - name: loaded_at
+        tests:
+          - not_null
+          
+      - name: silver_loaded_at
+        tests:
+          - not_null
+
