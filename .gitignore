@@ -274,3 +274,10 @@ mlruns/
 .env.*
 !.env.example
 __init__.py
+
+# Any passwords.json anywhere in project
+**/passwords.json
+
+# Config secrets
+airflow/config/*.json
+config/passwords.json
