@@ -1,0 +1,13 @@
+# ── [FIX 8] Provider pins updated for Airflow 3.0.x ─────────────
+# Do NOT hard-pin provider minor versions alongside Airflow 3.x;
+# let Airflow's constraint file resolve compatible versions.
+apache-airflow-providers-mongo
+apache-airflow-providers-postgres
+apache-airflow-providers-celery
+
+# ── Core pipeline deps ────────────────────────────────────────────
+# pyspark installed separately in Dockerfile (own layer, timeout-safe)
+pymongo==4.7.2
+psycopg2-binary==2.9.9
+pandas==2.2.2
+pyarrow==16.1.0
