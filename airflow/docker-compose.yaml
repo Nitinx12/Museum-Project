@@ -43,8 +43,7 @@ x-airflow-common: &airflow-common
     AIRFLOW__CELERY__BROKER_URL: redis://:@redis:6379/0
 
     # ── API / UI ──────────────────────────────────────────────────────
-    AIRFLOW__API__AUTH_BACKENDS: "airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session"
-    AIRFLOW__WEBSERVER__SECRET_KEY: "${WEBSERVER_SECRET_KEY}"
+    AIRFLOW__API__SECRET_KEY: "${WEBSERVER_SECRET_KEY}"
     AIRFLOW_CONFIG: "/opt/airflow/config/airflow.cfg"
 
     # ── [FIX 6] Museum pipeline env vars (all missing before) ────────
@@ -131,6 +130,14 @@ services:
     <<: *airflow-common
     container_name: museum_airflow_apiserver
     command: api-server
+    volumes:
+      - ${AIRFLOW_PROJ_DIR:-.}/dags:/opt/airflow/dags
+      - ${AIRFLOW_PROJ_DIR:-.}/logs:/opt/airflow/logs
+      - ${AIRFLOW_PROJ_DIR:-.}/config:/opt/airflow/config
+      - ${AIRFLOW_PROJ_DIR:-.}/plugins:/opt/airflow/plugins
+      - ${AIRFLOW_PROJ_DIR:-.}/src:/opt/airflow/src
+      - ${AIRFLOW_PROJ_DIR:-.}/data:/opt/airflow/data
+      - ./config/passwords.json:/opt/airflow/simple_auth_manager_passwords.json.generated
     ports:
       - "9100:8080"
     healthcheck:
@@ -268,9 +275,6 @@ services:
     environment:
       <<: *airflow-common-env
       _AIRFLOW_DB_MIGRATE: "true"
-      _AIRFLOW_WWW_USER_CREATE: "true"
-      _AIRFLOW_WWW_USER_USERNAME: ${_AIRFLOW_WWW_USER_USERNAME:-airflow}
-      _AIRFLOW_WWW_USER_PASSWORD: ${_AIRFLOW_WWW_USER_PASSWORD:-airflow}
       _PIP_ADDITIONAL_REQUIREMENTS: ""
     user: "0:0"
     restart: "no"
