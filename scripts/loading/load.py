@@ -1,46 +1,45 @@
 """
-transform.py
+load.py
 
-Silver-layer transformation pipeline.
+Gold-layer loading pipeline.
 
-Step order (ORDER MATTERS — snapshots feed silver models):
-  1. dbt snapshot          <- SCD Type 2 history rebuilt first
-  2. dbt run   silver      <- silver models built from snapshots + sources
-  3. dbt test  silver      <- 106 tests; 2 documented WARNs are acceptable
+Step order:
+  1. dbt run   gold      <- gold models built from silver layer
+  2. dbt test  gold      <- 41 tests; 0 known WARNs
 
-Known acceptable warnings (documented source-data gaps, not pipeline bugs):
-  - assert_product_size               — 2 records with no matching product size at source
-                                        (tests/silver/assert_product_size.sql)
-  - not_null_canvas_size_height_inches — 7 canvas size records missing height at source
-                                        (models/silver/schema.yml)
+Gold models:
+  dim_artist, dim_artwork, dim_canvas_size, dim_museum, fct_sales
+
+Known acceptable warnings:
+  None — gold layer currently has no documented source-data gaps.
+  Any WARN in gold is unexpected and will be flagged for investigation.
 
 Pass-rate gate:
   Pipeline is marked SUCCESS only when:
     (passed + warned) / total  >=  PASS_THRESHOLD   (default 0.95 / 95%)
+  Override at runtime:
+    DBT_PASS_THRESHOLD=0.90 python -m scripts.loading.load
 
   Current baseline (last clean run):
-    PASS=104  WARN=2  ERROR=0  SKIP=0  NO-OP=0  TOTAL=106  ->  pass_rate=100.0%  PASSED
-
-  Override at runtime:
-    DBT_PASS_THRESHOLD=0.90 python -m scripts.Transformation.transform
+    PASS=41  WARN=0  ERROR=0  SKIP=0  NO-OP=0  TOTAL=41  ->  pass_rate=100.0%  PASSED
 
   On failure the pipeline:
     1. Logs a CRITICAL data-quality alert with the breakdown
-    2. Writes a JSON failure report to <project_root>/watermark/transform/dq_failure_<timestamp>.json
+    2. Writes a JSON failure report to <project_root>/watermark/gold/dq_failure_<timestamp>.json
     3. Exits with code 1 to fail any upstream orchestrator (Airflow, etc.)
 
 Usage:
-    python -m scripts.Transformation.transform
-    python -m scripts.Transformation.transform --full-refresh
+    python -m scripts.loading.load
+    python -m scripts.loading.load --full-refresh
 
 Environment variables:
-    DBT_PROJECT_DIR    — path to the dbt project (default: <project_root>/museum_dbt)
-    DBT_PROFILES_DIR   — path to dbt profiles directory (default: ~/.dbt)
-    DBT_TARGET         — dbt target profile (default: dev)
-    DBT_THREADS        — dbt thread count (default: 4)
+    DBT_PROJECT_DIR   — path to the dbt project (default: <project_root>/museum_dbt)
+    DBT_PROFILES_DIR  — path to dbt profiles directory (default: ~/.dbt)
+    DBT_TARGET        — dbt target profile (default: dev)
+    DBT_THREADS       — dbt thread count (default: 4)
     DBT_PASS_THRESHOLD — DQ gate threshold as a float 0–1 (default: 0.95)
-    DBT_REPORTS_DIR    — failure report output dir (default: <project_root>/watermark/transform)
-    PROJECT_ROOT       — override auto-detected project root
+    DBT_REPORTS_DIR   — failure report output dir (default: <project_root>/watermark/gold)
+    PROJECT_ROOT      — override auto-detected project root
 """
 
 from __future__ import annotations
@@ -58,6 +57,15 @@ from pathlib import Path
 
 
 # -- sys.path fix --------------------------------------------------------------
+def _find_project_root() -> Path | None:
+    current = Path(__file__).resolve().parent
+    for _ in range(6):
+        if (current / "pyproject.toml").exists() or (current / "main.py").exists():
+            return current
+        current = current.parent
+    return None
+
+
 def _find_scripts_root() -> Path | None:
     current = Path(__file__).resolve().parent
     for _ in range(6):
@@ -69,27 +77,17 @@ def _find_scripts_root() -> Path | None:
     return None
 
 
-def _find_project_root() -> Path | None:
-    current = Path(__file__).resolve().parent
-    for _ in range(6):
-        if (current / "pyproject.toml").exists() or (current / "main.py").exists():
-            return current
-        current = current.parent
-    return None
-
-
-_scripts_root = _find_scripts_root()
-if _scripts_root is None:
-    # Fallback for Airflow Docker environment
-    _scripts_root = Path("/opt/airflow/project/scripts")
-
-if str(_scripts_root) not in sys.path:
-    sys.path.insert(0, str(_scripts_root))
-
 _project_root = _find_project_root()
 if _project_root is None:
     env_root = os.getenv("PROJECT_ROOT")
     _project_root = Path(env_root) if env_root else Path("/opt/airflow/project")
+
+_scripts_root = _find_scripts_root()
+if _scripts_root is None:
+    _scripts_root = Path("/opt/airflow/project/scripts")
+
+if str(_scripts_root) not in sys.path:
+    sys.path.insert(0, str(_scripts_root))
 
 
 # -- Project imports -----------------------------------------------------------
@@ -117,7 +115,7 @@ ISO_FMT          = "%Y-%m-%dT%H:%M:%S"
 
 
 # -- Data-quality pass-rate threshold ------------------------------------------
-# PASS + WARN both count as passing (WARNs are documented source-data gaps).
+# PASS + WARN both count as passing.
 # Raise/lower per environment via the env var:
 #   DEV / CI  -> DBT_PASS_THRESHOLD=0.85
 #   STAGING   -> DBT_PASS_THRESHOLD=0.90
@@ -135,30 +133,22 @@ except ValueError:
 
 
 # -- Report output directory ---------------------------------------------------
-# Failure reports are written here for orchestrators and alerting pipelines.
-REPORTS_DIR = Path(os.getenv("DBT_REPORTS_DIR", str(_project_root / "watermark" / "transform")))
+REPORTS_DIR = Path(os.getenv("DBT_REPORTS_DIR", str(_project_root / "watermark" / "gold")))
 
 
 # -- Known acceptable warnings -------------------------------------------------
-# These represent documented source-data gaps, not silver logic errors.
-# Pipeline treats WARN-only runs as SUCCESS.
-# Any warn NOT in this set will be flagged as unexpected and should be investigated.
+# Gold layer currently has no documented source-data gaps.
+# Any WARN here is unexpected and should be investigated immediately.
 #
-# Last verified: dbt test run — PASS=104 WARN=2 ERROR=0 TOTAL=106
+# Last verified: dbt test --select gold — PASS=41 WARN=0 ERROR=0 TOTAL=41
 #
-#   assert_product_size                — 2 records, tests/silver/assert_product_size.sql
-#   not_null_canvas_size_height_inches — 7 records, models/silver/schema.yml
-#
-KNOWN_WARNS: frozenset[str] = frozenset({
-    "assert_product_size",                # 2 records with no matching product size at source
-    "not_null_canvas_size_height_inches", # 7 canvas size records missing height at source
-})
+KNOWN_WARNS: frozenset[str] = frozenset()
 
 
 # -- Custom exception ----------------------------------------------------------
 class DataQualityError(RuntimeError):
     """
-    Raised when the silver-test pass rate falls below PASS_THRESHOLD.
+    Raised when the gold-test pass rate falls below PASS_THRESHOLD.
 
     Carries the full DbtTestSummary so callers (Airflow callbacks, alert
     handlers, etc.) can inspect the breakdown without re-parsing logs.
@@ -188,26 +178,16 @@ class DbtTestSummary:
 
     @property
     def pass_rate(self) -> float:
-        """
-        Fraction of tests considered passing.
-
-        Both PASS and WARN count as passing — WARNs are documented source-data
-        gaps, not silver-logic bugs. SKIP and ERROR do not count as passing.
-
-        Returns 0.0 when total == 0 to avoid ZeroDivisionError.
-        """
         if self.total == 0:
             return 0.0
         return (self.passed + self.warned) / self.total
 
     @property
     def is_clean(self) -> bool:
-        """True when there are zero hard errors (warnings are acceptable)."""
         return self.errored == 0
 
     @property
     def meets_threshold(self) -> bool:
-        """True when pass_rate >= PASS_THRESHOLD and there are no hard errors."""
         return self.pass_rate >= PASS_THRESHOLD and self.is_clean
 
     @property
@@ -223,15 +203,11 @@ def _write_failure_report(
     log,
 ) -> Path:
     """
-    Persist a JSON failure report to watermark/transform/ and return its path.
-
-    The report is machine-readable so downstream tools (Airflow on_failure
-    callbacks, Slack webhooks, PagerDuty integrations) can ingest it without
-    parsing log lines.
+    Persist a JSON failure report to watermark/gold/ and return its path.
 
     Schema:
     {
-        "pipeline":        "silver_transform",
+        "pipeline":        "gold_load",
         "status":          "DATA_QUALITY_FAILURE",
         "timestamp":       "<ISO-8601>",
         "environment":     "<DBT_TARGET>",
@@ -240,13 +216,10 @@ def _write_failure_report(
         "threshold":       0.95,
         "threshold_pct":   "95.0%",
         "gap_pct":         "-4.0%",
-        "counts": {
-            "passed": 455, "warned": 0, "errored": 45,
-            "skipped": 0,  "no_op": 0,  "total": 500
-        },
-        "failed_tests":        [...],
-        "warned_tests":        [...],
-        "unexpected_warns":    [...]
+        "counts": { "passed": ..., "warned": ..., "errored": ..., "no_op": ..., ... },
+        "failed_tests":     [...],
+        "warned_tests":     [...],
+        "unexpected_warns": [...]
     }
     """
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -254,7 +227,7 @@ def _write_failure_report(
     report_path = REPORTS_DIR / f"dq_failure_{ts_slug}.json"
 
     payload = {
-        "pipeline":      "silver_transform",
+        "pipeline":      "gold_load",
         "status":        "DATA_QUALITY_FAILURE",
         "timestamp":     run_ts,
         "environment":   DBT_TARGET,
@@ -288,7 +261,6 @@ def _write_failure_report(
 
 # -- dbt executable ------------------------------------------------------------
 def _dbt_exe() -> str:
-    """Return venv dbt.exe if on Windows, else fall back to PATH 'dbt'."""
     if os.name == "nt":
         venv_dbt = _project_root / ".venv" / "Scripts" / "dbt.exe"
         if venv_dbt.exists():
@@ -307,28 +279,23 @@ def _run_dbt(args: list[str], log) -> tuple[bool, float, str]:
     Both streams are drained concurrently by background threads to prevent
     the subprocess pipe buffer from filling and deadlocking (FIX 1).
 
-    --profiles-dir is always forwarded to dbt run/snapshot/test so the
+    --profiles-dir is always forwarded to dbt run/test so the
     DBT_PROFILES_DIR env var is actually respected (FIX 3).
 
     Returns:
         (success, duration_seconds, captured_stdout)
-
-    success is based purely on dbt's exit code.
-    For test steps, call _parse_test_output() to determine true success
-    after accounting for acceptable warnings.
     """
     subcommand = args[0]
     extra_args = args[1:]
 
     cmd = [_dbt_exe(), subcommand] + extra_args
 
-    # FIX 3: forward --profiles-dir so DBT_PROFILES_DIR is respected.
-    # snapshot is included here because it also reads profiles.
-    if subcommand in ("run", "snapshot", "test"):
+    # FIX 3: forward --profiles-dir so DBT_PROFILES_DIR is respected
+    if subcommand in ("run", "test"):
         cmd += [
-            "--target",       DBT_TARGET,
-            "--threads",      DBT_THREADS,
-            "--profiles-dir", str(DBT_PROFILES_DIR),
+            "--target",        DBT_TARGET,
+            "--threads",       DBT_THREADS,
+            "--profiles-dir",  str(DBT_PROFILES_DIR),
         ]
 
     log.info("CMD : %s", " ".join(cmd))
@@ -411,7 +378,7 @@ def _run_dbt(args: list[str], log) -> tuple[bool, float, str]:
 
     except Exception as exc:
         duration = (datetime.now() - t_start).total_seconds()
-        log.error("Unexpected error running dbt: %s", exc, exc_info=True)  # FIX minor: exc_info replaces manual traceback at DEBUG
+        log.error("Unexpected error running dbt: %s", exc, exc_info=True)  # FIX (minor): exc_info replaces manual traceback.format_exc at DEBUG
         return False, duration, ""
 
 
@@ -421,11 +388,7 @@ def _parse_test_output(output: str, log) -> DbtTestSummary:
     Parse dbt test stdout into a DbtTestSummary.
 
     Parses the summary line:
-        Done. PASS=104 WARN=2 ERROR=0 SKIP=0 NO-OP=0 TOTAL=106
-
-    And individual result lines like:
-        38 of 106 FAIL 34 assert_orphan_delivered_orders_without_payments ...
-        125 of 106 WARN 19 not_null_canvas_size_height_inches ...
+        Done. PASS=41 WARN=0 ERROR=0 SKIP=0 NO-OP=0 TOTAL=41
 
     FIX 2: if the summary line cannot be matched, a WARNING is emitted
     immediately so a parse failure is never mistaken for a clean run
@@ -434,9 +397,6 @@ def _parse_test_output(output: str, log) -> DbtTestSummary:
 
     FIX 4: NO-OP count is now captured and stored on the summary so the
     per-field counts always reconcile with TOTAL.
-
-    FIX 5: warned tests are logged at WARNING (not INFO) level so they
-    stand out in log viewers and are not buried in INFO noise.
     """
     summary = DbtTestSummary()
 
@@ -462,13 +422,11 @@ def _parse_test_output(output: str, log) -> DbtTestSummary:
             "DQ gate will treat this as total=0 and FAIL the pipeline."
         )
 
-    # Individual FAIL lines
     for fm in re.finditer(r"\d+ of \d+ FAIL \d+ (\S+)", output):
         name = fm.group(1)
         if name not in summary.failed_tests:
             summary.failed_tests.append(name)
 
-    # Individual WARN lines
     for wm in re.finditer(r"\d+ of \d+ WARN \d+ (\S+)", output):
         name = wm.group(1)
         if name not in summary.warned_tests:
@@ -486,8 +444,6 @@ def _parse_test_output(output: str, log) -> DbtTestSummary:
     )
 
     if summary.warned_tests:
-        # FIX 5: use log.warning so warned tests surface clearly in log viewers;
-        # previously logged at INFO which buried them alongside normal progress lines.
         log.warning("Warned tests (%d):", len(summary.warned_tests))
         for t in summary.warned_tests:
             tag = "[known - source gap]" if t in KNOWN_WARNS else "[UNEXPECTED - investigate!]"
@@ -519,13 +475,13 @@ def _check_data_quality_gate(
 
     On failure:
       1. Logs a CRITICAL banner with the full breakdown.
-      2. Writes a JSON failure report to watermark/transform/ for orchestrators.
+      2. Writes a JSON failure report to watermark/gold/ for orchestrators.
       3. Raises DataQualityError (caught by main(), which exits 1).
     """
     gate_ok = summary.meets_threshold
     gap     = summary.pass_rate * 100 - PASS_THRESHOLD * 100
 
-    # Single prominent DQ line — easy to spot in any log viewer
+    # Single prominent DQ line
     if gate_ok:
         log.info(
             "DATA QUALITY : %.1f%%  |  THRESHOLD : %.1f%%  |  PASSED  (%+.1f%%)",
@@ -572,8 +528,8 @@ def _check_data_quality_gate(
         summary.errored,
         summary.total,
     )
-    log.critical("  Silver layer output is UNTRUSTED.")
-    log.critical("  Downstream gold models must NOT run.")
+    log.critical("  Gold layer output is UNTRUSTED.")
+    log.critical("  Downstream consumers must NOT use this data.")
     log.critical("=" * 55)
 
     if summary.failed_tests:
@@ -582,7 +538,7 @@ def _check_data_quality_gate(
             log.critical("    FAIL  %s", t)
 
     if summary.unexpected_warns:
-        log.critical("Unexpected warnings (not in KNOWN_WARNS):")
+        log.critical("Unexpected warnings (gold layer should have zero warns):")
         for t in summary.unexpected_warns:
             log.critical("    WARN  %s", t)
 
@@ -594,10 +550,10 @@ def _check_data_quality_gate(
 
 # -- Main ----------------------------------------------------------------------
 def main(full_refresh: bool = False) -> None:
-    log    = get_logger(stage="transformation", name="__main__")
+    log    = get_logger(stage="loading", name="__main__")
     run_ts = datetime.now().strftime(ISO_FMT)
 
-    log.info("==============  TRANSFORM START  ==============")
+    log.info("==============  LOAD START  ==============")
     log.info("Timestamp   : %s", run_ts)
     log.info("dbt project : %s", DBT_PROJECT_DIR)
     log.info("Profiles dir: %s", DBT_PROFILES_DIR)
@@ -627,18 +583,16 @@ def main(full_refresh: bool = False) -> None:
 
     # Pipeline steps
     #
-    # ORDER IS CRITICAL:
-    #   1. snapshot  — SCD Type 2 tables must exist before silver models run
-    #   2. run       — silver models read from snapshots + raw sources
-    #   3. test      — validate silver after build; gate on 95% pass-rate threshold
+    # Gold reads directly from silver — no snapshot step needed.
+    #   1. run   — gold models read from silver layer
+    #   2. test  — validate gold after build; gate on 95% pass-rate threshold
     #
     refresh_flag = ["--full-refresh"] if full_refresh else []
 
     steps: list[tuple[str, list[str], bool]] = [
-        # (label,           dbt args,                               is_test_step)
-        ("snapshots",       ["snapshot"]           + refresh_flag,  False),
-        ("silver models",   ["run", "--select", "silver"] + refresh_flag, False),
-        ("silver tests",    ["test", "--select", "silver"],         True),
+        # (label,         dbt args,                             is_test_step)
+        ("gold models",   ["run", "--select", "gold"] + refresh_flag, False),
+        ("gold tests",    ["test", "--select", "gold"],               True),
     ]
 
     results:      list[tuple[str, bool, float]] = []
@@ -699,7 +653,7 @@ def main(full_refresh: bool = False) -> None:
         log.info("  DQ result   : %s", dq_result)
         log.info("  -----------------------------------------")
         log.info("  PASS        : %d", test_summary.passed)
-        log.info("  WARN        : %d  (known source gaps)", test_summary.warned)
+        log.info("  WARN        : %d", test_summary.warned)
         log.info("  ERROR       : %d", test_summary.errored)
         log.info("  NO-OP       : %d", test_summary.no_op)
         log.info("  TOTAL       : %d", test_summary.total)
@@ -708,7 +662,7 @@ def main(full_refresh: bool = False) -> None:
         if test_summary.unexpected_warns:
             log.warning("")
             log.warning(
-                "  %d UNEXPECTED warning(s) not in KNOWN_WARNS — investigate:",
+                "  %d UNEXPECTED warning(s) — gold layer should have zero warns:",
                 len(test_summary.unexpected_warns),
             )
             for t in test_summary.unexpected_warns:
