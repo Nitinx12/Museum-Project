@@ -7,14 +7,21 @@ Museum
 │  ├─ dags
 │  │  └─ pipeline.py
 │  ├─ docker-compose.yaml
-│  └─ plugins
+│  ├─ Dockerfile
+│  ├─ README.md
+│  └─ requirements.airflow.txt
 ├─ configs
-│  └─ connection.py
+│  ├─ connection.py
+│  └─ README.md
 ├─ datasets
 ├─ docs
-│  └─ art_museum_20_questions.pdf
+│  ├─ data_catlog.md
+│  ├─ docker.md
+│  ├─ incremental.md
+│  └─ star_schema.md
 ├─ drivers
-│  └─ postgresql.jar
+│  ├─ postgresql.jar
+│  └─ README.md
 ├─ main.py
 ├─ museum_dbt
 │  ├─ analyses
@@ -63,7 +70,8 @@ Museum
 │        ├─ assert_subject.sql
 │        └─ assert_work.sql
 ├─ notebooks
-│  └─ museum_bronze_eda.ipynb
+│  ├─ museum_bronze_eda.ipynb
+│  └─ README.MD
 ├─ pyproject.toml
 ├─ README.md
 ├─ scripts
@@ -72,6 +80,7 @@ Museum
 │  │  └─ extract.py
 │  ├─ loading
 │  │  └─ load.py
+│  ├─ README.MD
 │  └─ transformation
 │     └─ transform.py
 ├─ sql
@@ -94,18 +103,11 @@ Museum
 │  ├─ 17_missing_metadata_orphan_analysis.sql
 │  ├─ 18_museum_hours_artwork_correlation.sql
 │  ├─ 19_is_in_museum_audit_flag.sql
-│  └─ 20_full_star_schema_strees_test.sql
-├─ utils
-│  ├─ engine.py
-│  └─ logger.py
-└─ watermark
-   └─ extract
-      ├─ artist.json
-      ├─ canvas_size.json
-      ├─ museum.json
-      ├─ museum_hours.json
-      ├─ product_size.json
-      ├─ subject.json
-      └─ work.json
+│  ├─ 20_full_star_schema_strees_test.sql
+│  └─ README.md
+└─ utils
+   ├─ engine.py
+   ├─ logger.py
+   └─ README.md
 
 ```
