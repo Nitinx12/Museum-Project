@@ -10,6 +10,7 @@ An automated, tested, medallion-architecture data pipeline that turns raw MongoD
 ![Runtime](https://img.shields.io/badge/Runtime-Docker%20Compose-2496ED)
 
 ---
+<img width="2560" height="2560" alt="monalisa" src="https://github.com/user-attachments/assets/536946a4-313c-4c00-b59c-52068eaa5761" />
 
 ## Table of Contents
 
