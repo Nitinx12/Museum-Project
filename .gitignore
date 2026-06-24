@@ -281,3 +281,5 @@ __init__.py
 # Config secrets
 airflow/config/*.json
 config/passwords.json
+
+watermark
