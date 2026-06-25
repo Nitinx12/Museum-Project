@@ -1,0 +1,2 @@
+SELECT *
+FROM staffs AS ST
