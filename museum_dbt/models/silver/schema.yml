@@ -1,0 +1,359 @@
+# yaml-language-server: $schema=
+version: 2
+
+models:
+# ==================================================
+# Artists
+# ==================================================
+  - name: artist
+    description: "This table contains the cleaned data of artists."
+    columns:
+
+      # Primary key
+      - name: artist_id
+        description: "The unique identifier for each artist."
+        tests:
+          - unique
+          - not_null
+
+      - name: artist_name
+        description: "The name of the artist."
+        tests:
+          - not_null
+
+      - name: nationality
+        description: "nationality of artist"
+        tests:
+          - not_null
+
+      - name: style
+        description: "artist style"
+        tests:
+          - not_null
+
+      - name: birth_year
+        description: "artist born year"
+        tests:
+          - not_null
+          - accepeted_range:
+              arguments:
+                min_value: 1000
+                max_value: 2026
+
+      - name: death_year
+        description: "death year of artist. NULL for artists who are still alive."
+        tests:
+          - accepeted_range:
+              arguments:
+                min_value: 1000
+                max_value: 2026
+
+      - name: updated_at
+        description: "columns when last updated"
+        tests:
+          - not_null
+
+      - name: silver_loaded_at
+        description: "silver layer loaded artist"
+        tests:
+          - not_null
+
+# ==================================================
+# Canvas_size
+# ==================================================
+  - name: canvas_size
+    description: "Cleaned canvas size reference data."
+    columns:
+
+      # Primary key
+      - name: size_id
+        tests:
+          - unique
+          - not_null
+
+      - name: width_inches
+        tests:
+          - not_null
+          - accepeted_range:
+              arguments:
+                min_value: 0
+                inclusive: false
+      - name: height_inches
+        description: "Height in inches. NULL for Long Edge single-dimension sizes."
+        tests:
+          - not_null:
+              config:
+                severity: warn
+          - accepeted_range:
+              arguments:
+                min_value: 0
+                inclusive: false
+
+      - name: label
+        tests:
+          - not_null
+
+      - name: updated_at
+        tests:
+          - not_null
+
+      - name: silver_loaded_at
+        tests:
+          - not_null
+
+# ==================================================
+# Museum_hours
+# ==================================================
+  - name: museum_hours
+    description: "cleaned Museum_hours tables for silver layer"
+    columns:
+
+      - name: museum_id
+        tests:
+          - not_null
+          - no_orphan_rows:
+              arguments:
+                to: ref('museum')
+                field: museum_id
+
+      - name: day
+        description: "Day of the week."
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+              config:
+                severity: error
+
+      - name: open_time
+        tests:
+          - not_null
+
+      - name: close_time
+        tests:
+          - not_null
+
+      - name: updated_at
+        tests:
+          - not_null
+
+      - name: silver_loaded_at
+        tests:
+          - not_null
+
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - museum_id
+              - day
+
+# ==================================================
+# Museum
+# ==================================================
+  - name: museum
+    description: "Cleaned museum data with corrected city, state and postal fields."
+    columns:
+
+      # Primary key
+      - name: museum_id
+        description: "Unique identifier for each museum."
+        tests:
+          - unique
+          - not_null
+
+      - name: museum_name
+        description: "Name of the museum."
+        tests:
+          - not_null
+
+      - name: city
+        description: >
+          City where the museum is located. NULL when the source city field
+          was purely numeric (a misplaced postal code) with no state value
+          available to recover the real city name from.
+        tests:
+          - not_null:
+              config:
+                severity: warn
+
+      - name: state
+        description: "State or province. NULL for museums in countries without states."
+
+      - name: postal
+        description: "Postal code. NULL for some international museums."
+
+      - name: country
+        description: "Country where the museum is located."
+        tests:
+          - not_null
+
+      - name: address
+        description: "Street address of the museum."
+        tests:
+          - not_null
+
+      - name: phone
+        description: "Contact phone number."
+        tests:
+          - unique
+          - not_null
+          - matches_regex:
+              arguments:
+                regex: '^[0-9+()\-\s.]{6,30}$'
+
+      - name: url
+        description: "Website URL of the museum."
+        tests:
+          - unique
+          - not_null
+          - matches_regex:
+              arguments:
+                regex: '^https?://'
+
+      - name: updated_at
+        description: "When the record was last updated."
+        tests:
+          - not_null
+
+      - name: silver_loaded_at
+        description: "When the record was loaded into silver."
+        tests:
+          - not_null
+
+# ==================================================
+# Product_size
+# ==================================================
+  - name: product_size
+    description: "cleaned product_size table data for silver layer"
+    columns:
+
+      - name: work_id
+        tests:
+          - not_null
+          - no_orphan_rows:
+              arguments:
+                to: ref('work')
+                field: work_id
+
+      - name: size_id
+        tests:
+          - not_null
+          # Downgraded to warn: confirmed these size_ids are absent from
+          # bronze.canvas_size entirely (not a filtering/dedup bug in the
+          # canvas_size model) - a genuine upstream gap in the source
+          # system. See if these are discontinued sizes or a stale extract.
+          - no_orphan_rows:
+              arguments:
+                to: ref('canvas_size')
+                field: size_id
+              config:
+                severity: warn
+
+      - name: sale_price
+        tests:
+          - not_null
+          - not_negative
+
+      - name: regular_price
+        tests:
+          - not_null
+          - not_negative
+
+      - name: updated_at
+        tests:
+          - not_null
+
+      - name: silver_loaded_at
+        tests:
+          - not_null
+
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - work_id
+              - size_id
+
+# ==================================================
+# Subject
+# ==================================================
+  - name: subject
+    description: "Cleaned subject/tag data associated with each artwork for the silver layer."
+    columns:
+
+      - name: work_id
+        tests:
+          - not_null
+          - no_orphan_rows:
+              arguments:
+                to: ref('work')
+                field: work_id
+
+      - name: subject
+        tests:
+          - not_null
+
+      - name: updated_at
+        tests:
+          - not_null
+
+      - name: silver_loaded_at
+        tests:
+          - not_null
+
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - work_id
+              - subject
+
+# ==================================================
+# work
+# ==================================================
+  - name: work
+    description: "Cleaned artwork data with artist, style and museum references."
+    columns:
+
+      # Primary key
+      - name: work_id
+        description: "Unique identifier for each artwork."
+        tests:
+          - unique
+          - not_null
+
+      - name: name
+        description: "Title of the artwork."
+        tests:
+          - not_null
+
+      - name: artist_id
+        description: "Foreign key to artist. NULL if artist is unknown."
+        tests:
+          - no_orphan_rows:
+              arguments:
+                to: ref('artist')
+                field: artist_id
+
+      - name: style
+        description: "Artistic style of the work. NULL if not categorised."
+
+      - name: museum_id
+        description: "Foreign key to museum. NULL if museum is unknown."
+        tests:
+          - no_orphan_rows:
+              arguments:
+                to: ref('museum')
+                field: museum_id
+
+      - name: updated_at
+        description: "When the record was last updated."
+        tests:
+          - not_null
+
+      - name: silver_loaded_at
+        description: "When the record was loaded into silver."
+        tests:
+          - not_null
