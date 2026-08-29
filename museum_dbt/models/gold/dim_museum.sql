@@ -84,9 +84,9 @@ SELECT
     COALESCE(m.city, 'Unknown')                     AS city,
     m.state,
     COALESCE(m.country, 'Unknown')                  AS country,
-    m.address,
-    m.phone,
-    m.url,
+    NULLIF(REGEXP_REPLACE(TRIM(m.address), '\s+', ' ', 'g'), '') AS address,
+    NULLIF(REGEXP_REPLACE(TRIM(m.phone), '\s+', ' ', 'g'), '')   AS phone,
+    NULLIF(REGEXP_REPLACE(TRIM(m.url), '\s+', ' ', 'g'), '')     AS url,
 
     -- Hours enrichment (NULL-safe for museums with no hours loaded)
     COALESCE(h.opening_days_per_week, 0)            AS opening_days_per_week,
