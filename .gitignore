@@ -1,0 +1,420 @@
+# ============================================================================
+# PYTHON
+# ============================================================================
+
+# Byte-compiled / optimized files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Test / coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+.hypothesis/
+.pyre/
+
+# Type checkers / linters
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pytype/
+.pyright/
+
+# Profilers
+.prof
+*.prof
+
+# ============================================================================
+# VIRTUAL ENVIRONMENTS
+# ============================================================================
+
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Conda
+.conda/
+conda-env/
+
+# ============================================================================
+# UV / PYTHON PACKAGE MANAGERS
+# ============================================================================
+
+# UV virtual environment
+.venv/
+
+# UV cache
+.uv/
+
+# If you don't want to commit the lock file, uncomment:
+# uv.lock
+
+# ============================================================================
+# JUPYTER NOTEBOOKS
+# ============================================================================
+
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/
+
+# ============================================================================
+# IDE / EDITORS
+# ============================================================================
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# Cursor
+.cursor/
+
+# PyCharm / IntelliJ
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Sublime Text
+*.sublime-workspace
+*.sublime-project
+
+# Vim
+*.swp
+*.swo
+*~
+
+# Emacs
+*~
+\#*\#
+
+# ============================================================================
+# OPERATING SYSTEM
+# ============================================================================
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+
+# Windows installer files
+*.msi
+*.msix
+*.msp
+
+# Windows shortcuts
+*.lnk
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# macOS metadata
+._*
+
+# Linux
+*~
+
+# ============================================================================
+# ENVIRONMENT / SECRETS
+# ============================================================================
+
+.env
+.env.*
+!.env.example
+!.env.template
+
+# Local configuration
+config.local.*
+settings.local.*
+secrets/
+secret/
+credentials/
+*.secret
+*.credentials
+
+# Certificates / private keys
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+
+# ============================================================================
+# DATABASE
+# ============================================================================
+
+# PostgreSQL dumps
+*.sql.gz
+*.dump
+*.backup
+*.bak
+
+# SQLite
+*.db
+*.sqlite
+*.sqlite3
+
+# MySQL
+*.sql.bak
+
+# Local database directories
+postgres-data/
+postgres_data/
+pgdata/
+database/data/
+db/data/
+
+# ============================================================================
+# DATA FILES
+# ============================================================================
+
+# Raw datasets
+data/raw/
+dataset/raw/
+
+# Generated datasets
+data/processed/
+data/output/
+data/tmp/
+dataset/processed/
+dataset/output/
+
+# Large data files
+*.csv
+*.tsv
+*.parquet
+*.feather
+*.h5
+*.hdf5
+*.pickle
+*.pkl
+
+# If you intentionally want to commit sample datasets:
+# !data/sample/
+# !data/sample/*.csv
+
+# ============================================================================
+# LOGS
+# ============================================================================
+
+*.log
+logs/
+log/
+*.out
+
+# Application logs
+*.log.*
+log.*
+
+# ============================================================================
+# TEMPORARY FILES
+# ============================================================================
+
+tmp/
+temp/
+.tmp/
+.cache/
+.cache/
+*.tmp
+*.temp
+*.bak
+*.backup
+
+# ============================================================================
+# BUILD / GENERATED FILES
+# ============================================================================
+
+.cache/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ============================================================================
+# DOCKER
+# ============================================================================
+
+# Docker local data
+.docker/
+docker-data/
+docker_data/
+
+# Docker override files
+docker-compose.override.yml
+docker-compose.local.yml
+
+# ============================================================================
+# NODE / FRONTEND
+# ============================================================================
+
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+.npm/
+.yarn/
+.pnpm-store/
+
+# Frontend builds
+dist/
+build/
+.next/
+.nuxt/
+.cache/
+
+# ============================================================================
+# AIRFLOW / WORKFLOW TOOLS
+# ============================================================================
+
+airflow/logs/
+airflow/logs/*
+airflow/airflow.db
+airflow/airflow.cfg
+
+# ============================================================================
+# SPARK
+# ============================================================================
+
+.sparkStaging/
+.spark-warehouse/
+
+# ============================================================================
+# DATA SCIENCE / ML
+# ============================================================================
+
+mlruns/
+wandb/
+.DS_Store
+
+# Model files
+*.joblib
+*.onnx
+*.model
+
+# ============================================================================
+# CACHING
+# ============================================================================
+
+.cache/
+cache/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# ============================================================================
+# CREDENTIALS / CLOUD
+# ============================================================================
+
+# AWS
+.aws/
+*.tfstate
+*.tfstate.*
+
+# GCP
+*.json
+
+# NOTE:
+# If your project needs a committed service-account JSON,
+# explicitly whitelist that specific file instead of ignoring all JSON.
+
+# Azure
+.azure/
+
+# ============================================================================
+# TERRAFORM
+# ============================================================================
+
+.terraform/
+.terraform.lock.hcl
+
+# ============================================================================
+# DOCUMENTATION GENERATED OUTPUT
+# ============================================================================
+
+docs/_build/
+site/
+
+# ============================================================================
+# BACKUP / ARCHIVE FILES
+# ============================================================================
+
+*.zip
+*.tar
+*.tar.gz
+*.rar
+*.7z
+
+# ============================================================================
+# LOCAL PROJECT FILES
+# ============================================================================
+
+.local/
+.local.*
+*.local
+
+# ============================================================================
+# OS / TOOL STATE
+# ============================================================================
+
+.directory
+.history/
+.python-version
+
+# ============================================================================
+# GENERATED REPORTS
+# ============================================================================
+
+reports/generated/
+reports/output/
+*.xlsx
+*.xls
+*.pdf
+
+# ============================================================================
+# PROJECT-SPECIFIC
+# ============================================================================
+
+# Add your own local/generated directories here
+# output/
+# results/
+# artifacts/
+# exports/
