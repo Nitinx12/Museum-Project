@@ -2,7 +2,8 @@
     materialized='incremental',
     unique_key=['work_id', 'subject'],
     incremental_strategy='merge',
-    on_schema_change='sync_all_columns'
+    on_schema_change='sync_all_columns',
+    tags=['silver']
 ) }}
 
 WITH Source AS (
