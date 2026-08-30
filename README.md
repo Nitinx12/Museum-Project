@@ -33,6 +33,22 @@ flowchart LR
 4. Every layer is checked by both dbt tests and a hand-written SQL test suite.
 5. Airflow schedules and sequences the whole chain inside Docker.
 
+## Tech stack
+
+- **Source**: MongoDB (museum collections)
+- **Warehouse**: PostgreSQL
+- **Extraction**: PySpark, incremental
+- **Transformation**: dbt
+- **Orchestration**: Apache Airflow
+- **Runtime**: Docker Compose
+- **Testing**: dbt tests + custom SQL test suite
+
+## Prerequisites
+
+- Docker and Docker Compose
+- 4 GB+ RAM available to Docker
+- Ports `8080` (Airflow) and `5432` (Postgres) free on the host
+
 ## Quick start
 
 ```bash
@@ -41,7 +57,36 @@ docker compose up airflow-init   # one-time DB setup
 docker compose up -d             # start everything
 ```
 
-Open the Airflow UI at `http://localhost:8080` and trigger the DAG.
+Open the Airflow UI at `http://localhost:8081` and trigger the DAG.
+
+## Project structure
+
+```
+.
+├── dags/          # Airflow DAG definitions
+├── docker/        # Compose files and service configs
+├── dbt/           # Silver/Gold dbt models and tests
+├── scripts/       # PySpark bronze extraction jobs
+├── tests/         # Hand-written SQL validation suite
+├── monitor.js     # Real-time file/git/dependency watcher
+├── monitor_logs.sh # Log directory summary & cleanup
+└── docs/          # Detailed documentation
+```
+
+## Configuration
+
+Copy `.env.example` to `.env` in `docker/` and set your MongoDB connection
+string, Postgres credentials, and Airflow admin login before first run.
+
+## Running tests
+
+```bash
+docker compose exec airflow-webserver dbt test
+```
+
+The custom SQL suite under `tests/` runs automatically as part of the
+Airflow DAG after each layer completes, and can also be triggered manually
+via the `pipeline_runner.ps1` script described in `docs/pipeline.md`.
 
 ## Documentation
 
@@ -54,3 +99,10 @@ Full details live in `docs/`:
 | [`scripts.md`](docs/scripts.md) | What each pipeline script does |
 | [`pipeline.md`](docs/pipeline.md) | Local pipeline runner (`pipeline_runner.ps1`) |
 | [`utils.md`](docs/utils.md) | Shared connection/engine/logging helpers |
+| [`JS.md`](docs/JS.md) | Real-time file, git, and dependency watcher (`monitor.js`) |
+| [`monitor_logs.md`](docs/monitor_logs.md) | Log directory summary & cleanup (`monitor_logs.sh`) |
+
+## Contributing
+
+Open an issue or pull request for bug fixes, new dbt models, or additional
+test coverage. Please run the full test suite locally before submitting.
