@@ -6,7 +6,7 @@
 
 <p align="center">
   A medallion-architecture data platform that mirrors a museum's MongoDB source into Postgres,
-  models it with dbt, and validates every layer — orchestrated end-to-end by Airflow.
+  models it with dbt, and validates every layer orchestrated end-to-end by Airflow.
 </p>
 
 ---
@@ -63,14 +63,14 @@ Open the Airflow UI at `http://localhost:8081` and trigger the DAG.
 
 ```
 .
-├── dags/          # Airflow DAG definitions
-├── docker/        # Compose files and service configs
-├── dbt/           # Silver/Gold dbt models and tests
-├── scripts/       # PySpark bronze extraction jobs
-├── tests/         # Hand-written SQL validation suite
-├── monitor.js     # Real-time file/git/dependency watcher
+├── dags/           # Airflow DAG definitions
+├── docker/         # Compose files and service configs
+├── dbt/            # Silver/Gold dbt models and tests
+├── scripts/        # PySpark bronze extraction jobs
+├── tests/          # Hand-written SQL validation suite
+├── monitor.js      # Real-time file/git/dependency watcher
 ├── monitor_logs.sh # Log directory summary & cleanup
-└── docs/          # Detailed documentation
+└── docs/           # Detailed documentation
 ```
 
 ## Configuration
