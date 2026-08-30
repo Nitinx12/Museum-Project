@@ -6,8 +6,8 @@
 #
 # Lives in docker/, but the BUILD CONTEXT is the project root (see
 # `context: ..` in docker/compose.yml) so this can still COPY the sibling
-# dbt/ and spark_jobs/ folders. Paths below are all relative to that context,
-# not to this file's own location.
+# museum_dbt/ and pipeline/ folders. Paths below are all relative to that
+# context, not to this file's own location.
 #
 # Build:   docker compose -f docker/compose.yml build     (from project root)
 #     or:  cd docker && docker compose build
@@ -39,8 +39,12 @@ RUN uv pip install --system --no-cache -r /requirements.txt
 # Bake the dbt project (silver/gold) and PySpark jobs (bronze) into the image
 # so tasks can shell out to them without relying on a volume being present.
 # (Both are siblings of docker/ at the project root — hence context: ..)
-COPY --chown=airflow:root dbt/ /opt/airflow/dbt/
-COPY --chown=airflow:root spark_jobs/ /opt/airflow/spark_jobs/
+# NOTE: host folder is `museum_dbt/`, kept as `dbt` on the container side so
+# existing DAG code / dbt invocations referencing /opt/airflow/dbt still work.
+COPY --chown=airflow:root museum_dbt/ /opt/airflow/dbt/
+# NOTE: host folder is `pipeline/` — update this line if your PySpark jobs
+# actually live somewhere else (e.g. scripts/).
+COPY --chown=airflow:root pipeline/ /opt/airflow/spark_jobs/
 
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh

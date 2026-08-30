@@ -2,7 +2,8 @@ name: museum-etl
 
 # Lives in docker/. Relative paths below (build context, volumes) are
 # resolved relative to THIS file's directory, so they all go up one level
-# (..) to reach the project root where airflow/, dbt/, and spark_jobs/ live.
+# (..) to reach the project root where airflow/, museum_dbt/, and pipeline/
+# live.
 x-airflow-common: &airflow-common
   build:
     context: ..
@@ -35,8 +36,12 @@ x-airflow-common: &airflow-common
     - ../airflow/logs:/opt/airflow/logs
     - ../airflow/plugins:/opt/airflow/plugins
     - ../airflow/config:/opt/airflow/config
-    - ../dbt:/opt/airflow/dbt
-    - ../spark_jobs:/opt/airflow/spark_jobs
+    # NOTE: host folder is `museum_dbt/`, mounted as /opt/airflow/dbt so
+    # existing DAG code / dbt invocations referencing that path still work.
+    - ../museum_dbt:/opt/airflow/dbt
+    # NOTE: host folder is `pipeline/` — update this if your PySpark jobs
+    # actually live somewhere else (e.g. scripts/).
+    - ../pipeline:/opt/airflow/spark_jobs
   user: "${AIRFLOW_UID:-50000}:0"
   depends_on: &airflow-common-depends-on
     redis:
@@ -104,7 +109,7 @@ services:
     <<: *airflow-common
     command: api-server
     ports:
-      - "8080:8080"
+      - "8081:8080"
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://localhost:8080/api/v2/monitor/health"]
       interval: 30s
