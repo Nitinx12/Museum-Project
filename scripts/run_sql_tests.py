@@ -47,6 +47,7 @@ USAGE
 -----
     uv run scripts/run_sql_tests.py                  # every test, every layer
     uv run scripts/run_sql_tests.py --layer silver    # just tests/silver/
+    uv run scripts/run_sql_tests.py --layer silver --layer gold  # multiple layers
     uv run scripts/run_sql_tests.py --tests-dir path/to/tests
 
 Exit code: 0 if every test passed, 1 if any test failed or errored,
@@ -177,8 +178,9 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run the project's own SQL tests (tests/<layer>/*.sql).")
     parser.add_argument("--tests-dir", type=Path, default=None,
                          help="Path to the tests folder (default: <project_root>/tests).")
-    parser.add_argument("--layer", type=str, default=None,
-                         help="Only run tests in this one layer, e.g. --layer silver.")
+    parser.add_argument("--layer", type=str, action="append", default=None,
+                         help="Only run tests in this layer. Repeatable, e.g. "
+                              "--layer silver --layer gold.")
     return parser.parse_args()
 
 
@@ -195,10 +197,15 @@ def main() -> None:
 
     layers = discover_layers(tests_dir)
     if args.layer:
-        layers = [layer_dir for layer_dir in layers if layer_dir.name == args.layer]
-        if not layers:
-            console.print(f"[bold red]No layer folder named '{args.layer}' found under {tests_dir}[/bold red]")
+        requested = set(args.layer)
+        found_names = {layer_dir.name for layer_dir in layers}
+        missing = sorted(requested - found_names)
+        if missing:
+            console.print(
+                f"[bold red]No layer folder(s) named {missing} found under {tests_dir}[/bold red]"
+            )
             sys.exit(2)
+        layers = [layer_dir for layer_dir in layers if layer_dir.name in requested]
 
     console.rule("[bold cyan]sql_tests[/bold cyan]")
     console.print(f"[bold]tests dir:[/bold] {tests_dir}")
