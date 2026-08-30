@@ -1,0 +1,14 @@
+# Installed on top of apache/airflow:3.3.1-python3.12 (base image already
+# ships the Airflow core + Celery/Postgres/Redis providers).
+
+# Bronze extraction: MongoDB -> Postgres via PySpark
+pyspark==3.5.1
+pymongo==4.9.2
+
+# Silver/gold transforms
+dbt-core==1.8.8
+dbt-postgres==1.8.2
+
+# Postgres driver for the museum warehouse connection (in addition to
+# Airflow's own psycopg2 for the metadata DB)
+psycopg2-binary==2.9.9

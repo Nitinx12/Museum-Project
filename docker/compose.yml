@@ -1,0 +1,214 @@
+name: museum-etl
+
+# Lives in docker/. Relative paths below (build context, volumes) are
+# resolved relative to THIS file's directory, so they all go up one level
+# (..) to reach the project root where airflow/, dbt/, and spark_jobs/ live.
+x-airflow-common: &airflow-common
+  build:
+    context: ..
+    dockerfile: docker/Dockerfile
+  image: museum-airflow:latest
+  environment: &airflow-common-env
+    AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+    AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@postgres/airflow
+    AIRFLOW__CELERY__BROKER_URL: redis://:@redis:6379/0
+    AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+    # Airflow 3 DAG Bundles: point the dag-processor + scheduler at the
+    # mounted dags/ folder as a single local bundle.
+    AIRFLOW__CORE__DAG_BUNDLE_CONFIG_LIST: >-
+      [{"name": "dags-folder", "classpath":
+      "airflow.dag_processing.bundles.local.LocalDagBundle",
+      "kwargs": {"path": "/opt/airflow/dags"}}]
+    # Museum warehouse Postgres — a SEPARATE service/hostname from Airflow's
+    # own "postgres" metadata DB above, so DAG/PySpark/dbt connections never
+    # resolve to the wrong container.
+    MUSEUM_PG_SERVICE_NAME: museum-postgres
+    MUSEUM_PG_PORT: "5432"
+    MUSEUM_PG_USER: ${MUSEUM_PG_USER:-museum}
+    MUSEUM_PG_PASSWORD: ${MUSEUM_PG_PASSWORD:-museum}
+    MUSEUM_PG_DB: ${MUSEUM_PG_DB:-museum}
+    MONGO_URI: ${MONGO_URI:-mongodb://mongo:27017}
+    MONGO_DB: ${MONGO_DB:-museum_db}
+  volumes:
+    - ../airflow/dags:/opt/airflow/dags
+    - ../airflow/logs:/opt/airflow/logs
+    - ../airflow/plugins:/opt/airflow/plugins
+    - ../airflow/config:/opt/airflow/config
+    - ../dbt:/opt/airflow/dbt
+    - ../spark_jobs:/opt/airflow/spark_jobs
+  user: "${AIRFLOW_UID:-50000}:0"
+  depends_on: &airflow-common-depends-on
+    redis:
+      condition: service_healthy
+    postgres:
+      condition: service_healthy
+    museum-postgres:
+      condition: service_healthy
+
+services:
+  # --- Airflow's own metadata DB ---
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - postgres-db-volume:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 10s
+      retries: 5
+      start_period: 5s
+    restart: always
+
+  # --- museum warehouse DB (bronze/silver/gold) — kept separate on purpose ---
+  museum-postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ${MUSEUM_PG_USER:-museum}
+      POSTGRES_PASSWORD: ${MUSEUM_PG_PASSWORD:-museum}
+      POSTGRES_DB: ${MUSEUM_PG_DB:-museum}
+    ports:
+      - "5433:5432"  # host 5433 -> avoids clashing with a local Postgres on 5432
+    volumes:
+      - museum-db-volume:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "museum"]
+      interval: 10s
+      retries: 5
+      start_period: 5s
+    restart: always
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: always
+
+  # Uncomment if the museum's source MongoDB should also run locally.
+  # If you're pulling from Atlas or another remote instance, delete this
+  # block and just set MONGO_URI (above) in your .env file instead.
+  # mongo:
+  #   image: mongo:7
+  #   volumes:
+  #     - mongo-data:/data/db
+  #   ports:
+  #     - "27017:27017"
+
+  airflow-api-server:
+    <<: *airflow-common
+    command: api-server
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/api/v2/monitor/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+
+  airflow-scheduler:
+    <<: *airflow-common
+    command: scheduler
+    healthcheck:
+      test: ["CMD-SHELL", 'airflow jobs check --job-type SchedulerJob --hostname "$${HOSTNAME}"']
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: always
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+
+  # Airflow 3 parses DAGs out-of-process from the scheduler — this service
+  # is required, the scheduler will not parse DAGs on its own anymore.
+  airflow-dag-processor:
+    <<: *airflow-common
+    command: dag-processor
+    healthcheck:
+      test: ["CMD-SHELL", 'airflow jobs check --job-type DagProcessorJob --hostname "$${HOSTNAME}"']
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: always
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+
+  airflow-worker:
+    <<: *airflow-common
+    command: celery worker
+    healthcheck:
+      test:
+        - "CMD-SHELL"
+        - 'celery --app airflow.providers.celery.executors.celery_executor.app inspect ping -d "celery@$${HOSTNAME}"'
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    environment:
+      <<: *airflow-common-env
+      # Allow the worker's Celery process to receive SIGTERM directly so a
+      # `docker compose stop` waits for in-flight tasks to finish cleanly.
+      DUMB_INIT_SETSID: "0"
+    restart: always
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+
+  airflow-triggerer:
+    <<: *airflow-common
+    command: triggerer
+    healthcheck:
+      test: ["CMD-SHELL", 'airflow jobs check --job-type TriggererJob --hostname "$${HOSTNAME}"']
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: always
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+
+  # One-shot: creates host-mounted dirs with the right owner, then runs
+  # `airflow db migrate`. Run once (`docker compose up airflow-init`) before
+  # the first `docker compose up`; it's a no-op to re-run after that.
+  airflow-init:
+    <<: *airflow-common
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        mkdir -p /opt/airflow/logs /opt/airflow/dags /opt/airflow/plugins
+        chown -R "${AIRFLOW_UID:-50000}:0" /opt/airflow/{logs,dags,plugins}
+        exec /entrypoint airflow db migrate
+    user: "0:0"
+
+  # Handy for one-off `docker compose run airflow-cli airflow dags list` etc.
+  airflow-cli:
+    <<: *airflow-common
+    profiles: ["debug"]
+    environment:
+      <<: *airflow-common-env
+      CONNECTION_CHECK_MAX_COUNT: "0"
+    command: bash
+
+volumes:
+  postgres-db-volume:
+  museum-db-volume:
+  # mongo-data:

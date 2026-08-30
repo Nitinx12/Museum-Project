@@ -1,0 +1,22 @@
+# Airflow container file ownership (Linux: run `id -u`; not used on macOS/
+# Windows Docker Desktop).
+AIRFLOW_UID=50000
+
+# --- Museum warehouse Postgres ---
+# Deliberately MUSEUM_PG_* instead of POSTGRES_* — a plain POSTGRES_HOST/
+# POSTGRES_USER here would collide with Airflow's own metadata-DB env vars
+# (which entrypoint.sh and AIRFLOW__DATABASE__SQL_ALCHEMY_CONN also read).
+# Containers reach this at museum-postgres:5432 — that hostname is fixed by
+# the compose service name in compose.yml, not something to set here.
+# From the HOST machine (a local dbt run, DBeaver, etc.) use localhost:5433
+# instead (see the museum-postgres port mapping in compose.yml).
+MUSEUM_PG_DB=Museum
+MUSEUM_PG_USER=postgres
+MUSEUM_PG_PASSWORD=admin
+
+# --- Source MongoDB ---
+# mongodb://mongo:27017 only resolves for containers if you uncomment the
+# `mongo` service in compose.yml. Point this at Atlas or another remote
+# instance instead if that's your actual source.
+MONGO_URI=mongodb://mongo:27017
+MONGO_DB=museum_db
