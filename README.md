@@ -1,3 +1,10 @@
+![Source](https://img.shields.io/badge/Source-MongoDB-47A248)
+![Extraction](https://img.shields.io/badge/Extraction-PySpark%20%2B%20JDBC-E25A1C)
+![Transformation](https://img.shields.io/badge/Transformation-dbt-FF694B)
+![Warehouse](https://img.shields.io/badge/Warehouse-PostgreSQL-336791)
+![Orchestration](https://img.shields.io/badge/Orchestration-Apache%20Airflow%203.x-017CEE)
+![Runtime](https://img.shields.io/badge/Runtime-Docker%20Compose-2496ED)
+
 <p align="center">
   <img src="assets/mona_lisa_logo.png" width="220" alt="Museum ETL logo">
 </p>
