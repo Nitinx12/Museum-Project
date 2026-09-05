@@ -14,22 +14,32 @@
 ## 0. Project at a glance
 
 ```text
-MongoDB  →  [scripts/incremental.py / PySpark]   →  Bronze (Postgres)
-                                                       ↓
-                                          [scripts/dbt_runner.py / dbt]
-                                                       ↓
-                                              Silver (cleaned models)
-                                                       ↓
-                                              Gold (star schema for BI)
-                                                       ↓
-                                [scripts/run_sql_tests.py / SQL files]
+MongoDB  →  [scripts/python/incremental.py / PySpark]   →  Bronze (Postgres)
+                                                                  ↓
+                                                 [scripts/python/dbt_runner.py / dbt]
+                                                                  ↓
+                                                      Silver (cleaned models)
+                                                                  ↓
+                                                      Gold (star schema for BI)
+                                                                  ↓
+                                       [scripts/python/run_sql_tests.py / SQL files]
 ```
 
 Everything ships inside Docker Compose (`docker/compose.yml`). The
 Airflow DAG `museum_project` (`airflow/dags/museum_pipeline.py`) is the
-canonical execution order; the local PowerShell runner
-(`pipeline/pipeline_runner.ps1`) reproduces the same order outside
-Airflow.
+canonical execution order. Three local runners reproduce the same order
+without Airflow:
+
+| Runner | Audience |
+|---|---|
+| `main.py` (project root) | Python-first; `uv run main.py` |
+| `scripts/ps1/pipeline_runner.ps1` | Windows PowerShell 7+ users |
+| `scripts/bash/run_pipeline.sh` | Linux, macOS, Git Bash on Windows |
+
+The pre-flight bash helpers in `scripts/bash/` (`setup_env.sh`,
+`check_dependencies.sh`, `check_jars.sh`, `docker_status.sh`,
+`clean_logs.sh`) are shared by every runner and are safe to source
+directly.
 
 ---
 
@@ -67,7 +77,7 @@ Airflow.
 
 ---
 
-## 2. Bash (`monitor_logs.sh`, `docker/entrypoint.sh`, ad-hoc scripts)
+## 2. Bash (`scripts/bash/monitor_logs.sh`, `docker/entrypoint.sh`, ad-hoc scripts)
 
 ### Style
 
@@ -114,12 +124,24 @@ Airflow.
 
 - `docker/entrypoint.sh` — wait loops, env defaults via
   `${VAR:-default}`, `exec` into the official entrypoint at the end.
-- `monitor_logs.sh` — flag/keep logic with portable `stat`, summary
+- `scripts/bash/monitor_logs.sh` — flag/keep logic with portable `stat`, summary
   table at the end, no-op when `logs/` is missing.
+- `scripts/bash/setup_env.sh` — sources `.env` with `set -a` auto-export,
+  validates required keys, masks passwords in echoed output.
+- `scripts/bash/check_jars.sh` — validates jars/ against installed PySpark
+  version before any Spark work runs.
+- `scripts/bash/check_dependencies.sh` — unified pre-flight: tools, env,
+  jars, Python dep resolution.
+- `scripts/bash/docker_status.sh` — `docker compose ps` with JSON parsing
+  and optional `--watch` polling loop.
+- `scripts/bash/run_pipeline.sh` — bash equivalent of `pipeline_runner.ps1`,
+  fail-fast stage loop with `tee`-style streaming.
+- `scripts/bash/clean_logs.sh` — wraps `scripts/bash/monitor_logs.sh clean`, adds
+  tar.gz archive to `logs/.archive/` before deletion.
 
 ---
 
-## 3. Python (`scripts/`, `airflow/dags/`, `museum_dbt/macros/`)
+## 3. Python (`scripts/python/`, `main.py`, `airflow/dags/`, `museum_dbt/macros/`)
 
 ### Version & tooling
 
@@ -149,7 +171,7 @@ Airflow.
 ### Logging
 
 - Use `logging.getLogger(__name__)`, never `print()` for anything
-  that isn't a deliberate CLI table (see `scripts/dbt_runner.py` —
+  that isn't a deliberate CLI table (see `scripts/python/dbt_runner.py` —
   it uses `rich` for the summary on purpose).
 - Stream + persist: pipe live output to stdout *and* to a
   timestamped `logs/<script>_<UTC-timestamp>.log`.
@@ -159,7 +181,7 @@ Airflow.
 - Argument parsing: `argparse` with explicit `help=` strings on every
   argument. Make flags repeatable (`action="append"`) where the
   underlying command supports it (see `--layer` in
-  `scripts/run_sql_tests.py`).
+  `scripts/python/run_sql_tests.py`).
 - Exit codes: `0` on success, non-zero on any failure. No silent
   exit-0 paths.
 - Long-running output: prefer streaming line-by-line over
@@ -174,11 +196,11 @@ Airflow.
 - Catch only what you can recover from; let the rest propagate.
 - Validation errors should carry the *offending value* and the
   *expected pattern* in the message — see the version-mismatch
-  check in `scripts/incremental.py`.
+  check in `scripts/python/incremental.py`.
 
 ### PySpark specifics
 
-- SparkSession construction is centralised in `scripts/incremental.py`;
+- SparkSession construction is centralised in `scripts/python/incremental.py`;
   don't create new ones elsewhere.
 - Type sanitization: `_id` → `str`, nested structs/arrays → `json.dumps`.
   This is documented in `docs/ARCHITECTURE.md §4` and must not be
@@ -200,12 +222,16 @@ Airflow.
 
 ### Examples in this repo
 
-- `scripts/incremental.py` — type hints everywhere, rich table for
-  results, watermark table updates, exception path writes a log row
-  even on failure.
-- `scripts/dbt_runner.py` — stage ordering with hard stops, rich
-  summary table, per-stage log files.
-- `scripts/run_sql_tests.py` — auto-discovery, per-test
+- `main.py` (project root) — top-level local runner; same stage order
+  as the DAG, with `--skip-tests`, `--bronze-only`, `--full`, and
+  `--dry-run` flags. Sources `scripts/bash/setup_env.sh` to export
+  `.env` before any `uv` call.
+- `scripts/python/incremental.py` — type hints everywhere, rich table
+  for results, watermark table updates, exception path writes a log
+  row even on failure.
+- `scripts/python/dbt_runner.py` — stage ordering with hard stops,
+  rich summary table, per-stage log files.
+- `scripts/python/run_sql_tests.py` — auto-discovery, per-test
   transactions, single aggregated exception at the end.
 - `airflow/dags/museum_pipeline.py` — minimal DAG, four tasks,
   fail-fast chain.
@@ -230,7 +256,7 @@ Airflow.
 ### Patterns
 
 - **Upsert**: `INSERT ... ON CONFLICT ("_id") DO UPDATE SET ...`
-  is the canonical merge pattern. See `scripts/incremental.py`.
+  is the canonical merge pattern. See `scripts/python/incremental.py`.
 - **Row-count validation**: always `SELECT COUNT(*)` *after* the
   write, never trust the writer's reported count.
 - **Watermark**: `etl_watermarks` is one row per collection; never
@@ -287,7 +313,7 @@ museum_dbt/
 - Silver models carry `tags: ['silver']` (or
   `{{ config(tags=['silver']) }}`).
 - Gold models carry `tags: ['gold']`.
-- These tags drive selection in `scripts/dbt_runner.py`. **A model
+- These tags drive selection in `scripts/python/dbt_runner.py`. **A model
   without a tag won't run.**
 
 ### Incremental contracts
@@ -327,7 +353,7 @@ museum_dbt/
 
 ---
 
-## 6. PowerShell (`pipeline/pipeline_runner.ps1`)
+## 6. PowerShell (`scripts/ps1/pipeline_runner.ps1`)
 
 ### Style
 
@@ -491,13 +517,14 @@ A comment is **not** justified when:
 
 | Change touches … | Run … |
 |---|---|
-| `scripts/incremental.py` | `uv run scripts/incremental.py --dry-run` |
-| `scripts/dbt_runner.py` | `uv run scripts/dbt_runner.py --skip-tests` against a populated warehouse |
-| `scripts/run_sql_tests.py` | `uv run scripts/run_sql_tests.py --layer <layer>` for each affected layer |
-| `museum_dbt/models/**` | `uv run scripts/dbt_runner.py --full-refresh` |
+| `scripts/python/incremental.py` | `uv run scripts/python/incremental.py --dry-run` |
+| `scripts/python/dbt_runner.py` | `uv run scripts/python/dbt_runner.py --skip-tests` against a populated warehouse |
+| `scripts/python/run_sql_tests.py` | `uv run scripts/python/run_sql_tests.py --layer <layer>` for each affected layer |
+| `museum_dbt/models/**` | `uv run scripts/python/dbt_runner.py --full-refresh` |
 | `airflow/dags/**` | `docker compose -f docker/compose.yml restart airflow-dag-processor` and watch its log |
 | `docker/**` | `docker compose -f docker/compose.yml config -q` (syntax check) |
-| `pipeline/pipeline_runner.ps1` | `./pipeline/pipeline_runner.ps1 -BronzeOnly` for a smoke test |
+| `scripts/ps1/pipeline_runner.ps1` | `./scripts/ps1/pipeline_runner.ps1 -BronzeOnly` for a smoke test |
+| `scripts/python/**` / `scripts/bash/**` | `./scripts/bash/check_dependencies.sh --strict` then `./scripts/bash/run_pipeline.sh --bronze-only` |
 | Any committed change | `git status`, then a clean `git diff HEAD` review |
 
 ---
@@ -506,12 +533,13 @@ A comment is **not** justified when:
 
 | If you're working on … | Start at … |
 |---|---|
-| Bronze load | `scripts/incremental.py`, `docs/ARCHITECTURE.md §4`, `jars/` |
+| Bronze load | `scripts/python/incremental.py`, `docs/ARCHITECTURE.md §4`, `jars/` |
 | Silver models | `museum_dbt/models/silver/`, `docs/ARCHITECTURE.md §5` |
 | Gold models | `museum_dbt/models/gold/`, `docs/data_catlog.md` |
-| Data quality | `scripts/run_sql_tests.py`, `museum_dbt/tests/generic/` |
+| Data quality | `scripts/python/run_sql_tests.py`, `museum_dbt/tests/generic/` |
 | Orchestration | `airflow/dags/museum_pipeline.py`, `docs/Docker.md` |
-| Local runs | `pipeline/pipeline_runner.ps1`, `docs/Pipeline.md` |
+| Local runs | `main.py`, `scripts/ps1/pipeline_runner.ps1`, `scripts/bash/run_pipeline.sh` |
 | Docker / startup | `docker/compose.yml`, `docker/Dockerfile`, `docs/Docker.md` |
-| Logging / cleanup | `monitor_logs.sh`, `docs/monitor_logs.md` |
+| Pre-flight checks | `scripts/bash/setup_env.sh`, `scripts/bash/check_dependencies.sh`, `scripts/bash/check_jars.sh` |
+| Logging / cleanup | `scripts/bash/monitor_logs.sh`, `scripts/bash/clean_logs.sh`, `docs/monitor_logs.md` |
 | Real-time repo watching | `monitor.js`, `docs/JS.md` |

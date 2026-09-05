@@ -30,10 +30,10 @@ Postgres, using PySpark to move the data.
 data.
 
 ```bash
-uv run scripts/incremental.py                     # everything
-uv run scripts/incremental.py --tables orders,customers
-uv run scripts/incremental.py --full-refresh      # ignore history, reload all
-uv run scripts/incremental.py --dry-run           # preview only, writes nothing
+uv run scripts/python/incremental.py                     # everything
+uv run scripts/python/incremental.py --tables orders,customers
+uv run scripts/python/incremental.py --full-refresh      # ignore history, reload all
+uv run scripts/python/incremental.py --dry-run           # preview only, writes nothing
 ```
 
 **Needs:** a `jars/` folder with the matching Mongo + Postgres driver files
@@ -60,11 +60,11 @@ broken silver layer.
 that raw data into cleaned (silver) and reporting-ready (gold) tables.
 
 ```bash
-uv run scripts/dbt_runner.py                  # full silver → gold run
-uv run scripts/dbt_runner.py --skip-tests     # build only, no tests
-uv run scripts/dbt_runner.py --silver-only    # stop after silver
-uv run scripts/dbt_runner.py --gold-only      # skip silver (assumes it's already built)
-uv run scripts/dbt_runner.py --full-refresh   # rebuild everything from scratch
+uv run scripts/python/dbt_runner.py                  # full silver → gold run
+uv run scripts/python/dbt_runner.py --skip-tests     # build only, no tests
+uv run scripts/python/dbt_runner.py --silver-only    # stop after silver
+uv run scripts/python/dbt_runner.py --gold-only      # skip silver (assumes it's already built)
+uv run scripts/python/dbt_runner.py --full-refresh   # rebuild everything from scratch
 ```
 
 **Needs:** `rich` installed, and a dbt project somewhere in the repo (it's
@@ -98,8 +98,8 @@ nothing else to configure.
 problems dbt's own tests might not cover.
 
 ```bash
-uv run scripts/run_sql_tests.py                  # every test, every layer
-uv run scripts/run_sql_tests.py --layer silver   # just the silver folder
+uv run scripts/python/run_sql_tests.py                  # every test, every layer
+uv run scripts/python/run_sql_tests.py --layer silver   # just the silver folder
 ```
 
 **What you get:** A results table (pass/fail per test), a saved log file,

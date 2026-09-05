@@ -11,9 +11,9 @@ Three scripts carry the actual workload:
 
 | Script | Layer | Responsibility |
 |---|---|---|
-| `scripts/incremental.py` | Bronze | MongoDB → Postgres load (PySpark) |
-| `scripts/dbt_runner.py` | Silver / Gold | dbt build orchestration |
-| `scripts/run_sql_tests.py` | Cross-layer | Hand-written SQL data-quality checks |
+| `scripts/python/incremental.py` | Bronze | MongoDB → Postgres load (PySpark) |
+| `scripts/python/dbt_runner.py` | Silver / Gold | dbt build orchestration |
+| `scripts/python/run_sql_tests.py` | Cross-layer | Hand-written SQL data-quality checks |
 
 ## 2. System diagram
 

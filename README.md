@@ -73,10 +73,13 @@ Open the Airflow UI at `http://localhost:8081` and trigger the DAG.
 ├── dags/           # Airflow DAG definitions
 ├── docker/         # Compose files and service configs
 ├── dbt/            # Silver/Gold dbt models and tests
-├── scripts/        # PySpark bronze extraction jobs
 ├── tests/          # Hand-written SQL validation suite
 ├── monitor.js      # Real-time file/git/dependency watcher
-├── monitor_logs.sh # Log directory summary & cleanup
+├── scripts/        # Pipeline runners and bash helpers
+│   ├── bash/      # Shell scripts (setup, checks, runner, monitor)
+│   ├── ps1/       # PowerShell runner (pipeline_runner.ps1)
+│   └── python/    # Core pipeline scripts (incremental.py, dbt_runner.py, run_sql_tests.py)
+├── main.py         # Top-level pipeline entry point
 └── docs/           # Detailed documentation
 ```
 
@@ -93,7 +96,7 @@ docker compose exec airflow-webserver dbt test
 
 The custom SQL suite under `tests/` runs automatically as part of the
 Airflow DAG after each layer completes, and can also be triggered manually
-via the `pipeline_runner.ps1` script described in `docs/pipeline.md`.
+via the `scripts/ps1/pipeline_runner.ps1` script described in `docs/pipeline.md`.
 
 ## Documentation
 
@@ -104,10 +107,10 @@ Full details live in `docs/`:
 | [`ARCHITECTURE.md`](docs/ARCHITECTURE.md) | System design, data flow, reliability principles |
 | [`docker.md`](docs/docker.md) | Containers, services, startup sequence |
 | [`scripts.md`](docs/scripts.md) | What each pipeline script does |
-| [`pipeline.md`](docs/pipeline.md) | Local pipeline runner (`pipeline_runner.ps1`) |
+| [`pipeline.md`](docs/pipeline.md) | Local pipeline runner (`scripts/ps1/pipeline_runner.ps1`) |
 | [`utils.md`](docs/utils.md) | Shared connection/engine/logging helpers |
 | [`JS.md`](docs/JS.md) | Real-time file, git, and dependency watcher (`monitor.js`) |
-| [`monitor_logs.md`](docs/monitor_logs.md) | Log directory summary & cleanup (`monitor_logs.sh`) |
+| [`monitor_logs.md`](docs/monitor_logs.md) | Log directory summary & cleanup (`scripts/bash/monitor_logs.sh`) |
 
 ## Contributing
 
