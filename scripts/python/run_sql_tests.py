@@ -87,8 +87,6 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from utils.engine import postgres_engine  # noqa: E402
-
 
 class SQLTestSuiteFailed(Exception):
     """Raised once, at the end of the run, if one or more individual tests
@@ -217,6 +215,7 @@ def main() -> None:
     console.print(f"[bold]layers:[/bold] {', '.join(p.name for p in layers) or '(none found)'}\n")
 
     try:
+        from utils.engine import postgres_engine  # noqa: E402
         engine = postgres_engine()
     except Exception as exc:  # noqa: BLE001
         console.print(f"[bold red]Could not connect to the database:[/bold red] {exc}")

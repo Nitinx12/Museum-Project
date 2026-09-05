@@ -113,11 +113,24 @@ from sqlalchemy import text
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import SQLAlchemyError
 
-from utils.connection import MONGO_DB, MONGO_URI
-from utils.engine import mongo_client, postgres_engine
 from utils.logging_config import get_logger
 
 log = get_logger("museum.extraction.bronze")
+
+
+def _mongo_db() -> str:
+    from utils.connection import MONGO_DB  # noqa: E402
+    return MONGO_DB
+
+
+def _mongo_client():
+    from utils.engine import mongo_client  # noqa: E402
+    return mongo_client()
+
+
+def _postgres_engine():
+    from utils.engine import postgres_engine  # noqa: E402
+    return postgres_engine()
 
 # System / internal collections we never want to mirror into Postgres.
 MONGO_SYSTEM_PREFIXES = ("system.",)
@@ -153,6 +166,7 @@ def _local_jars() -> list[str]:
 
 
 def build_spark(app_name: str) -> SparkSession:
+    from utils.connection import MONGO_URI  # noqa: E402
     jars = _local_jars()
     builder = (
         pyspark.sql.SparkSession.builder.appName(app_name)
@@ -391,7 +405,7 @@ def read_collection(
 ) -> DataFrame:
     df = (
         spark.read.format("mongodb")
-        .option("database", MONGO_DB)
+        .option("database", _mongo_db())
         .option("collection", collection)
         .load()
     )
@@ -700,7 +714,7 @@ def render_report(results: list[CollectionResult], elapsed: float, dry_run: bool
     console.print(
         Panel.fit(
             "[bold]MongoDB -> PostgreSQL Incremental Load Report[/bold]\n"
-            f"Database: [cyan]{MONGO_DB}[/cyan]  ->  Schema: [cyan]{BRONZE_SCHEMA}[/cyan]\n"
+            f"Database: [cyan]{_mongo_db()}[/cyan]  ->  Schema: [cyan]{BRONZE_SCHEMA}[/cyan]\n"
             f"Run ID: [magenta]{run_id}[/magenta]\n"
             f"Run finished: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}"
             + ("  [yellow](DRY RUN - no data written)[/yellow]" if dry_run else ""),
@@ -864,8 +878,8 @@ def main() -> int:
     console.rule("[bold cyan]incremental: MongoDB -> PostgreSQL incremental load[/bold cyan]")
     log.info(f"Starting run {run_id} (full_refresh={args.full_refresh}, dry_run={args.dry_run}, tables={args.tables})")
 
-    mongo_db = mongo_client()
-    engine = postgres_engine()
+    mongo_db = _mongo_client()
+    engine = _postgres_engine()
     ensure_control_tables(engine)
 
     if args.tables:
