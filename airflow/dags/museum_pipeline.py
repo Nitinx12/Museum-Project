@@ -26,10 +26,10 @@ default_args = {
 
 
 def _run(args: list[str]) -> None:
-    """Run one of the project's `uv run scripts/...` CLI scripts from the
-    project root and raise (failing the Airflow task) if it exits non-zero.
-    Each script already streams its own Rich-formatted progress/summary to
-    stdout, which lands in the task's Airflow log."""
+    """Run one of the project's `uv run scripts/python/...` CLI scripts from
+    the project root and raise (failing the Airflow task) if it exits
+    non-zero. Each script already streams its own Rich-formatted progress/
+    summary to stdout, which lands in the task's Airflow log."""
     result = subprocess.run(args, cwd=PROJECT_ROOT, check=False)
     if result.returncode != 0:
         raise RuntimeError(
@@ -51,27 +51,27 @@ with DAG(
     # Bronze: Mongo -> Postgres incremental load
     @task(task_id="bronze_load")
     def bronze_load():
-        _run(["uv", "run", "scripts/incremental.py"])
+        _run(["uv", "run", "scripts/python/incremental.py"])
 
     # Our own SQL tests (tests/bronze/*.sql) against the bronze data just
     # loaded. Fail fast here, before spending time building silver/gold on
     # top of bronze data that's already known to be bad.
     @task(task_id="test_bronze")
     def test_bronze():
-        _run(["uv", "run", "scripts/run_sql_tests.py", "--layer", "bronze"])
+        _run(["uv", "run", "scripts/python/run_sql_tests.py", "--layer", "bronze"])
 
     # Silver + gold: dbt build only. Tests run as their own task below, kept
     # separate so a build failure and a test failure show up as two
     # distinct, separately retriable/alertable stages instead of one big run.
     @task(task_id="build_silver_gold")
     def build_silver_gold():
-        _run(["uv", "run", "scripts/dbt_runner.py", "--skip-tests"])
+        _run(["uv", "run", "scripts/python/dbt_runner.py", "--skip-tests"])
 
     # Our own SQL tests (tests/silver/*.sql, tests/gold/*.sql) against the
     # models just built.
     @task(task_id="test_silver_gold")
     def test_silver_gold():
-        _run(["uv", "run", "scripts/run_sql_tests.py", "--layer", "silver", "--layer", "gold"])
+        _run(["uv", "run", "scripts/python/run_sql_tests.py", "--layer", "silver", "--layer", "gold"])
 
     # Task Dependencies
     bronze_load_task = bronze_load()
