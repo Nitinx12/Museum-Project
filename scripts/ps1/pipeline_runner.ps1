@@ -1,22 +1,22 @@
-#requires -Version 5.1
+﻿#requires -Version 5.1
 <#
 .SYNOPSIS
-    pipeline/pipeline_runner.ps1
+    scripts/ps1/pipeline_runner.ps1
 
     Runs the full museum pipeline locally, in the same order as the Airflow
-    DAG (dags/museum_pipeline.py):
+    DAG (airflow/dags/museum_pipeline.py):
 
         bronze_load -> test_bronze -> build_silver_gold -> test_silver_gold
 
     Stops immediately if any stage fails, so a broken bronze load never gets
     built on top of in silver/gold -- same fail-fast behaviour as
-    scripts/dbt_runner.py and the Airflow DAG.
+    scripts/python/dbt_runner.py and the Airflow DAG.
 
 .DESCRIPTION
     Each stage shells out to `uv run scripts/<script>.py` from the project
-    root (this script's parent folder), streams output to the console, logs
-    it to logs/<stage>_<timestamp>.log, then prints a pass/fail summary
-    table across every stage that ran.
+    root (this script's parent of parent folder), streams output to the
+    console, logs it to logs/<stage>_<timestamp>.log, then prints a
+    pass/fail summary table across every stage that ran.
 
 .PARAMETER SkipTests
     Skip both test stages (test_bronze, test_silver_gold).
@@ -29,17 +29,17 @@
 
 .PARAMETER ProjectRoot
     Override the auto-detected project root. By default this script assumes
-    it lives at <project_root>/pipeline/pipeline_runner.ps1 and uses its own
-    parent folder.
+    it lives at <project_root>/scripts/ps1/pipeline_runner.ps1 and uses its
+    own grandparent folder.
 
 .EXAMPLE
-    ./pipeline/pipeline_runner.ps1
+    ./scripts/ps1/pipeline_runner.ps1
 
 .EXAMPLE
-    ./pipeline/pipeline_runner.ps1 -SkipTests
+    ./scripts/ps1/pipeline_runner.ps1 -SkipTests
 
 .EXAMPLE
-    ./pipeline/pipeline_runner.ps1 -FullRefresh
+    ./scripts/ps1/pipeline_runner.ps1 -FullRefresh
 #>
 
 [CmdletBinding()]
@@ -53,10 +53,11 @@ param(
 $ErrorActionPreference = "Stop"
 
 # ---------------------------------------------------------------------------
-# Project root: this script lives at <project_root>/pipeline/pipeline_runner.ps1
+# Project root: this script lives at <project_root>/scripts/ps1/pipeline_runner.ps1
+# so the project root is the *grandparent* of $PSScriptRoot.
 # ---------------------------------------------------------------------------
 if (-not $ProjectRoot) {
-    $ProjectRoot = Split-Path -Parent $PSScriptRoot
+    $ProjectRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 }
 $ProjectRoot = (Resolve-Path -LiteralPath $ProjectRoot).Path
 
@@ -135,21 +136,21 @@ function Write-Summary {
 # ---------------------------------------------------------------------------
 $stages = [ordered]@{}
 
-$bronzeLoadArgs = @("run", "scripts/incremental.py")
+$bronzeLoadArgs = @("run", "scripts/python/incremental.py")
 if ($FullRefresh) { $bronzeLoadArgs += "--full-refresh" }
 $stages["bronze_load"] = $bronzeLoadArgs
 
 if (-not $SkipTests) {
-    $stages["test_bronze"] = @("run", "scripts/run_sql_tests.py", "--layer", "bronze")
+    $stages["test_bronze"] = @("run", "scripts/python/run_sql_tests.py", "--layer", "bronze")
 }
 
 if (-not $BronzeOnly) {
-    $buildArgs = @("run", "scripts/dbt_runner.py", "--skip-tests")
+    $buildArgs = @("run", "scripts/python/dbt_runner.py", "--skip-tests")
     if ($FullRefresh) { $buildArgs += "--full-refresh" }
     $stages["build_silver_gold"] = $buildArgs
 
     if (-not $SkipTests) {
-        $stages["test_silver_gold"] = @("run", "scripts/run_sql_tests.py", "--layer", "silver", "--layer", "gold")
+        $stages["test_silver_gold"] = @("run", "scripts/python/run_sql_tests.py", "--layer", "silver", "--layer", "gold")
     }
 }
 

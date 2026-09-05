@@ -1,6 +1,6 @@
 """
-scripts/incremental.py
-=======================
+scripts/python/incremental.py
+=============================
 Production-grade MongoDB -> PostgreSQL (bronze schema) loader, built on
 PySpark. Rebuilt in the style of scripts/extract.py (see that file for the
 original reference), wired to this project's actual utils/ package and to
@@ -43,11 +43,11 @@ WHAT IT DOES
 
 USAGE
 -----
-    uv run scripts/incremental.py                     # every collection in the DB
-    uv run scripts/incremental.py --tables orders,customers
-    uv run scripts/incremental.py --full-refresh       # applies to every selected collection
-    uv run scripts/incremental.py --dry-run            # discover/count only, write nothing
-    uv run scripts/incremental.py --watermark-column updated_at
+    uv run scripts/python/incremental.py                     # every collection in the DB
+    uv run scripts/python/incremental.py --tables orders,customers
+    uv run scripts/python/incremental.py --full-refresh       # applies to every selected collection
+    uv run scripts/python/incremental.py --dry-run            # discover/count only, write nothing
+    uv run scripts/python/incremental.py --watermark-column updated_at
 
 Requires (uv add): pyspark pymongo sqlalchemy psycopg2-binary rich python-dotenv
 Requires jars/ to already hold the matching mongo-spark-connector + mongo
@@ -98,8 +98,10 @@ warnings.showwarning = _rich_showwarning
 
 # ---------------------------------------------------------------------------
 # Make `utils` importable regardless of the CWD this script is launched from.
+# This file lives at <project_root>/scripts/python/incremental.py, so the
+# project root is three levels up.
 # ---------------------------------------------------------------------------
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
@@ -113,9 +115,9 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from utils.connection import MONGO_DB, MONGO_URI
 from utils.engine import mongo_client, postgres_engine
-from utils.logger import get_logger
+from utils.logging_config import get_logger
 
-log = get_logger("extraction", "incremental")
+log = get_logger("museum.extraction.bronze")
 
 # System / internal collections we never want to mirror into Postgres.
 MONGO_SYSTEM_PREFIXES = ("system.",)
@@ -133,295 +135,51 @@ INCREMENTAL_COLUMN_CANDIDATES = [
     "created_timestamp",
 ]
 
-# Control tables (also live in BRONZE_SCHEMA, alongside the mirrored
-# collections). Deliberately plain tables so they can be queried with any
-# SQL client, not just this script.
 WATERMARK_TABLE = "etl_watermarks"
 LOG_TABLE = "etl_logs"
 
-# --------------------------------------------------------------------------
-# Local jars only -- no spark.jars.packages, no Ivy resolution noise, no
-# network access at runtime. Drop the matching jars in <project_root>/jars/.
-# Which "matching" means depends on your installed PySpark major version:
-#
-#   PySpark 4.x (Spark 4.0+, Scala 2.13):
-#       mongo-spark-connector_2.13-11.1.0.jar
-#       bson-5.1.4.jar, mongodb-driver-core-5.1.x.jar, mongodb-driver-sync-5.1.x.jar
-#       postgresql-42.7.4.jar
-#
-#   PySpark 3.x (Spark 3.2-3.5, Scala 2.12):
-#       mongo-spark-connector_2.12-10.4.0.jar
-#       bson-5.1.4.jar, mongodb-driver-core-5.1.x.jar, mongodb-driver-sync-5.1.x.jar
-#       postgresql-42.7.4.jar
-#
-# The mongo-spark-connector major version tracks Spark (10.x -> Spark <=3.5,
-# 11.x -> Spark 4.0+), and it also switches Scala build (_2.12 -> _2.13) at
-# that same boundary. Mixing a 10.x/_2.12 connector jar with a Spark 4.x
-# runtime produces java.lang.NoSuchMethodError: ExpressionEncoder.resolveAndBind(...).
 JARS_DIR = PROJECT_ROOT / "jars"
-
-CONNECTOR_JAR_URLS = {
-    4: {
-        "mongo-spark-connector_2.13-11.1.0.jar": "https://repo1.maven.org/maven2/org/mongodb/spark/mongo-spark-connector_2.13/11.1.0/mongo-spark-connector_2.13-11.1.0.jar",
-        "mongodb-driver-sync-5.1.4.jar": "https://repo1.maven.org/maven2/org/mongodb/mongodb-driver-sync/5.1.4/mongodb-driver-sync-5.1.4.jar",
-        "bson-5.1.4.jar": "https://repo1.maven.org/maven2/org/mongodb/bson/5.1.4/bson-5.1.4.jar",
-        "mongodb-driver-core-5.1.4.jar": "https://repo1.maven.org/maven2/org/mongodb/mongodb-driver-core/5.1.4/mongodb-driver-core-5.1.4.jar",
-        "bson-record-codec-5.1.4.jar": "https://repo1.maven.org/maven2/org/mongodb/bson-record-codec/5.1.4/bson-record-codec-5.1.4.jar",
-    },
-    3: {
-        "mongo-spark-connector_2.12-10.4.0.jar": "https://repo1.maven.org/maven2/org/mongodb/spark/mongo-spark-connector_2.12/10.4.0/mongo-spark-connector_2.12-10.4.0.jar",
-        "mongodb-driver-sync-5.1.4.jar": "https://repo1.maven.org/maven2/org/mongodb/mongodb-driver-sync/5.1.4/mongodb-driver-sync-5.1.4.jar",
-        "bson-5.1.4.jar": "https://repo1.maven.org/maven2/org/mongodb/bson/5.1.4/bson-5.1.4.jar",
-        "mongodb-driver-core-5.1.4.jar": "https://repo1.maven.org/maven2/org/mongodb/mongodb-driver-core/5.1.4/mongodb-driver-core-5.1.4.jar",
-        "bson-record-codec-5.1.4.jar": "https://repo1.maven.org/maven2/org/mongodb/bson-record-codec/5.1.4/bson-record-codec-5.1.4.jar",
-    },
-}
+LOG_DIR_NAME = "logs"
 
 
 # ---------------------------------------------------------------------------
-# Result bookkeeping
+# Spark bootstrap
 # ---------------------------------------------------------------------------
-@dataclass
-class CollectionResult:
-    name: str
-    status: str = "OK"  # OK | SKIPPED | FAILED | VALIDATION FAILED | DRY-RUN
-    mode: str = "incremental"  # full | incremental
-    incremental_column: Optional[str] = None
-    mongo_rows: int = 0
-    postgres_rows_before: int = 0
-    batch_rows: int = 0  # rows pulled from Mongo this run
-    rows_inserted: int = 0
-    rows_updated: int = 0
-    skipped_rows: int = 0
-    postgres_rows_after: int = 0
-    columns: int = 0
-    error: Optional[str] = None  # short, single-line -- shown in the console table
-    error_full: Optional[str] = None  # full traceback -- written to etl_logs only
-    seconds: float = 0.0
-    complex_fields_flattened: list = field(default_factory=list)
-    watermark_before: Optional[datetime] = None
-    watermark_after: Optional[datetime] = None
-    validation_status: str = "N/A"
-    validation_detail: str = ""
-
-
-# ---------------------------------------------------------------------------
-# Error message cleanup
-# ---------------------------------------------------------------------------
-def short_error(exc: BaseException, max_len: int = 220) -> str:
-    """Collapse a possibly huge, multi-line Java/py4j/Python traceback into
-    one clean, human-readable line for console display. Full detail is kept
-    separately (see CollectionResult.error_full) for the DB audit trail."""
-    text_ = str(exc).strip()
-    keep: list[str] = []
-    for raw in text_.splitlines():
-        ln = raw.strip()
-        if not ln:
-            continue
-        if ln.startswith(("at ", 'File "')) or re.match(r"^\.{3}\s*\d+\s*more$", ln):
-            break
-        keep.append(ln)
-        if len(keep) >= 2:
-            break
-    msg = " -- ".join(keep) if keep else (text_.splitlines() or [exc.__class__.__name__])[0]
-    msg = re.sub(r"\s+", " ", msg).strip(": ")
-    if len(msg) > max_len:
-        msg = msg[: max_len - 1].rstrip() + "…"
-    return f"{exc.__class__.__name__}: {msg}"
-
-
-# ---------------------------------------------------------------------------
-# Spark session
-# ---------------------------------------------------------------------------
-def _local_jars() -> list[Path]:
-    """Resolve every .jar in JARS_DIR and sanity-check the mongo connector
-    build against the installed PySpark major version, so a mismatch fails
-    fast with one clear panel instead of the same cryptic
-    java.lang.NoSuchMethodError repeated for every collection."""
-    jar_paths = sorted(JARS_DIR.glob("*.jar"))
-    if not jar_paths:
-        console.print(
-            Panel.fit(
-                f"[bold red]No .jar files found in {JARS_DIR}[/bold red]\n"
-                "See the comment above JARS_DIR in this script for the jars you need.",
-                border_style="red",
-                title="Setup incomplete",
-            )
-        )
-        raise SystemExit(2)
-
-    connector_jars = [p for p in jar_paths if "mongo-spark-connector" in p.name]
-    if not connector_jars:
-        console.print(
-            Panel.fit(
-                f"[bold red]No mongo-spark-connector jar found in {JARS_DIR}[/bold red]\n"
-                "See the comment above JARS_DIR in this script for the correct one to download.",
-                border_style="red",
-                title="Setup incomplete",
-            )
-        )
-        raise SystemExit(2)
-
-    connector_name = connector_jars[0].name
-    spark_major = int(pyspark.__version__.split(".")[0])
-    expected_scala = "_2.13" if spark_major >= 4 else "_2.12"
-
-    if expected_scala not in connector_name:
-        wrong_major = 3 if spark_major >= 4 else 4
-        tip = "\n".join(
-            f"  {name}\n    {url}"
-            for name, url in CONNECTOR_JAR_URLS[spark_major].items()
-        )
-        console.print(
-            Panel.fit(
-                f"[bold red]Connector/Spark version mismatch[/bold red]\n"
-                f"PySpark [yellow]{pyspark.__version__}[/yellow] is installed (needs a "
-                f"[cyan]{expected_scala}[/cyan] connector build), but {JARS_DIR} has "
-                f"[cyan]{connector_name}[/cyan], which targets Spark {wrong_major}.x.\n"
-                "This exact mismatch is what causes NoSuchMethodError: resolveAndBind(...).\n\n"
-                f"Delete {connector_name} and download these instead:\n\n{tip}",
-                border_style="red",
-                title="Version check failed",
-            )
-        )
-        raise SystemExit(2)
-
-    return jar_paths
+def _local_jars() -> list[str]:
+    jars = []
+    if JARS_DIR.is_dir():
+        jars.extend(str(p) for p in JARS_DIR.iterdir() if p.suffix == ".jar")
+    return jars
 
 
 def build_spark(app_name: str) -> SparkSession:
-    jar_paths = _local_jars()
-    # extraClassPath (not spark.jars) so the JVM reads the jars in place
-    # instead of copying them into a Windows temp dir it can later fail to
-    # clean up because it's still holding the file lock.
-    classpath = os.pathsep.join(str(p) for p in jar_paths)
-
-    spark = (
-        SparkSession.builder.appName(app_name)
-        .config("spark.driver.extraClassPath", classpath)
-        .config("spark.executor.extraClassPath", classpath)
-        # Explicit interpreter path so Spark's worker subprocess doesn't
-        # invoke bare "python" -- on Windows that can resolve to the
-        # Microsoft Store's App Execution Alias stub instead of this venv's
-        # real interpreter, which never connects back and times out.
-        .config("spark.pyspark.python", sys.executable)
-        .config("spark.pyspark.driver.python", sys.executable)
+    jars = _local_jars()
+    builder = (
+        pyspark.sql.SparkSession.builder.appName(app_name)
         .config("spark.mongodb.read.connection.uri", MONGO_URI)
-        .config("spark.mongodb.read.database", MONGO_DB)
-        .config("spark.sql.session.timeZone", "UTC")
-        .config("spark.log.level", "ERROR")
-        .getOrCreate()
+        .config("spark.mongodb.write.connection.uri", MONGO_URI)
     )
+    if jars:
+        builder = builder.config("spark.jars", ",".join(jars))
+    spark = builder.getOrCreate()
     spark.sparkContext.setLogLevel("ERROR")
-    log.info(f"Spark session started (PySpark {pyspark.__version__}, {len(jar_paths)} local jar(s))")
     return spark
 
 
-def postgres_jdbc_url_and_props() -> tuple[str, dict]:
-    from utils.connection import (
-        POSTGRES_DATABASE,
-        POSTGRES_HOST,
-        POSTGRES_PASSWORD,
-        POSTGRES_PORT,
-        POSTGRES_USERNAME,
+# ---------------------------------------------------------------------------
+# Postgres helpers
+# ---------------------------------------------------------------------------
+def postgres_jdbc_url_and_props() -> tuple[str, dict[str, str]]:
+    url = (
+        f"jdbc:postgresql://{os.environ['POSTGRES_HOST']}:"
+        f"{os.environ['POSTGRES_PORT']}/{os.environ['POSTGRES_DB']}"
     )
-
-    url = f"jdbc:postgresql://{POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DATABASE}"
     props = {
-        "user": POSTGRES_USERNAME,
-        "password": POSTGRES_PASSWORD,
+        "user": os.environ["POSTGRES_USER"],
+        "password": os.environ["POSTGRES_PASSWORD"],
         "driver": "org.postgresql.Driver",
     }
     return url, props
-
-
-# ---------------------------------------------------------------------------
-# Discovery
-# ---------------------------------------------------------------------------
-def discover_collections(mongo_db) -> list[str]:
-    names = mongo_db.list_collection_names()
-    collections = sorted(
-        c for c in names if not any(c.startswith(p) for p in MONGO_SYSTEM_PREFIXES)
-    )
-    log.info(f"Discovered {len(collections)} collection(s) in '{MONGO_DB}': {collections}")
-    return collections
-
-
-def detect_incremental_column(
-    sample_fields: list[str], override: Optional[str] = None
-) -> Optional[str]:
-    """Pick the watermark column for a collection: an explicit override wins,
-    otherwise the first candidate (in priority order) actually present on a
-    sample document. Returns None if the collection has none of them."""
-    if override:
-        return override if override in sample_fields else None
-    for candidate in INCREMENTAL_COLUMN_CANDIDATES:
-        if candidate in sample_fields:
-            return candidate
-    return None
-
-
-# ---------------------------------------------------------------------------
-# Postgres metadata helpers
-# ---------------------------------------------------------------------------
-def table_exists(engine: Engine, table: str) -> bool:
-    q = text(
-        "SELECT EXISTS (SELECT 1 FROM information_schema.tables "
-        "WHERE table_schema = :schema AND table_name = :table)"
-    )
-    with engine.connect() as conn:
-        return bool(conn.execute(q, {"schema": BRONZE_SCHEMA, "table": table}).scalar())
-
-
-def get_row_count(engine: Engine, table: str) -> int:
-    if not table_exists(engine, table):
-        return 0
-    with engine.connect() as conn:
-        return int(
-            conn.execute(text(f'SELECT COUNT(*) FROM "{BRONZE_SCHEMA}"."{table}"')).scalar() or 0
-        )
-
-
-def has_unique_index_on(engine: Engine, table: str, column: str) -> bool:
-    q = text("""
-        SELECT 1
-        FROM pg_index i
-        JOIN pg_class t ON t.oid = i.indrelid
-        JOIN pg_namespace n ON n.oid = t.relnamespace
-        JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = ANY(i.indkey)
-        WHERE n.nspname = :schema AND t.relname = :table
-          AND a.attname = :column AND i.indisunique
-          AND i.indnatts = 1
-    """)
-    with engine.connect() as conn:
-        return (
-            conn.execute(q, {"schema": BRONZE_SCHEMA, "table": table, "column": column}).fetchone()
-            is not None
-        )
-
-
-def ensure_unique_id_index(engine: Engine, table: str) -> bool:
-    """Make sure `_id` has a unique index so ON CONFLICT ("_id") works.
-    Returns True if the table can be safely merged into, False if not
-    (e.g. duplicate _id values already exist from a prior append-only run)."""
-    if has_unique_index_on(engine, table, PRIMARY_KEY_COLUMN):
-        return True
-    index_name = f"{table}_{PRIMARY_KEY_COLUMN.strip('_')}_uidx"
-    try:
-        with engine.begin() as conn:
-            conn.execute(
-                text(
-                    f'CREATE UNIQUE INDEX IF NOT EXISTS "{index_name}" '
-                    f'ON "{BRONZE_SCHEMA}"."{table}" ("{PRIMARY_KEY_COLUMN}")'
-                )
-            )
-        return True
-    except SQLAlchemyError:
-        log.warning(
-            f'[{table}] could not create a unique index on "{PRIMARY_KEY_COLUMN}" '
-            f"(likely duplicate values already present) -- upserts will fall back to append-only."
-        )
-        return False
 
 
 def ensure_schema(engine: Engine) -> None:
@@ -429,154 +187,190 @@ def ensure_schema(engine: Engine) -> None:
         conn.execute(text(f'CREATE SCHEMA IF NOT EXISTS "{BRONZE_SCHEMA}"'))
 
 
-# ---------------------------------------------------------------------------
-# Control tables: bronze.etl_watermarks (incremental state) and
-# bronze.etl_logs (per-collection run history)
-# ---------------------------------------------------------------------------
 def ensure_control_tables(engine: Engine) -> None:
-    """Create the watermark + logs control tables if they don't exist yet.
-    Fully idempotent -- safe to call on every run."""
     ensure_schema(engine)
-    ddl_watermarks = f"""
-        CREATE TABLE IF NOT EXISTS {BRONZE_SCHEMA}.{WATERMARK_TABLE} (
-            table_name              TEXT PRIMARY KEY,
-            incremental_column       TEXT,
-            last_watermark_value     TIMESTAMPTZ,
-            last_run_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
-            last_run_mode            TEXT,
-            last_run_rows_inserted   BIGINT NOT NULL DEFAULT 0,
-            last_run_rows_updated    BIGINT NOT NULL DEFAULT 0,
-            updated_at               TIMESTAMPTZ NOT NULL DEFAULT now()
+    watermarks_ddl = f"""
+        CREATE TABLE IF NOT EXISTS "{BRONZE_SCHEMA}"."{WATERMARK_TABLE}" (
+            table_name         TEXT PRIMARY KEY,
+            incremental_column TEXT,
+            last_watermark_value TIMESTAMPTZ,
+            last_run_at          TIMESTAMPTZ,
+            last_run_mode        TEXT,
+            last_run_rows_inserted BIGINT DEFAULT 0,
+            last_run_rows_updated BIGINT DEFAULT 0
         )
     """
-    ddl_logs = f"""
-        CREATE TABLE IF NOT EXISTS {BRONZE_SCHEMA}.{LOG_TABLE} (
-            id                      BIGSERIAL PRIMARY KEY,
-            run_id                  TEXT NOT NULL,
-            table_name              TEXT NOT NULL,
-            mode                    TEXT,
-            incremental_column      TEXT,
-            status                  TEXT NOT NULL,
-            mongo_rows              BIGINT,
-            postgres_rows_before    BIGINT,
-            batch_rows              BIGINT,
-            rows_inserted           BIGINT,
-            rows_updated            BIGINT,
-            skipped_rows            BIGINT,
-            postgres_rows_after     BIGINT,
-            columns_count           INT,
-            validation_status       TEXT,
-            validation_detail       TEXT,
-            error                   TEXT,
-            started_at              TIMESTAMPTZ,
-            finished_at             TIMESTAMPTZ,
-            duration_seconds        DOUBLE PRECISION,
-            logged_at               TIMESTAMPTZ NOT NULL DEFAULT now()
+    logs_ddl = f"""
+        CREATE TABLE IF NOT EXISTS "{BRONZE_SCHEMA}"."{LOG_TABLE}" (
+            id               BIGSERIAL PRIMARY KEY,
+            run_id           TEXT NOT NULL,
+            started_at       TIMESTAMPTZ NOT NULL,
+            finished_at      TIMESTAMPTZ NOT NULL,
+            table_name       TEXT NOT NULL,
+            mode             TEXT,
+            watermark_before TIMESTAMPTZ,
+            watermark_after  TIMESTAMPTZ,
+            mongo_rows       BIGINT,
+            rows_inserted    BIGINT,
+            rows_updated     BIGINT,
+            batch_rows       BIGINT,
+            skipped_rows     BIGINT,
+            columns          INTEGER,
+            status           TEXT,
+            validation_status TEXT,
+            validation_detail TEXT,
+            error            TEXT,
+            error_full       TEXT,
+            complex_fields_flattened TEXT[]
         )
     """
     with engine.begin() as conn:
-        conn.execute(text(ddl_watermarks))
-        conn.execute(text(ddl_logs))
-    log.info(f"Confirmed control tables exist: {BRONZE_SCHEMA}.{WATERMARK_TABLE}, {BRONZE_SCHEMA}.{LOG_TABLE}")
+        conn.execute(text(watermarks_ddl))
+        conn.execute(text(logs_ddl))
+
+
+def table_exists(engine: Engine, table: str) -> bool:
+    with engine.begin() as conn:
+        result = conn.execute(
+            text(f"""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables
+                    WHERE table_schema = :schema
+                      AND table_name   = :table
+                )
+            """),
+            {"schema": BRONZE_SCHEMA, "table": table},
+        )
+        return result.scalar()  # type: ignore[return-value]
+
+
+def get_row_count(engine: Engine, table: str) -> int:
+    with engine.begin() as conn:
+        result = conn.execute(
+            text(f'SELECT count(*) FROM "{BRONZE_SCHEMA}"."{table}"'),
+        )
+        return int(result.scalar() or 0)  # type: ignore[arg-type]
 
 
 def get_watermark(engine: Engine, table: str) -> Optional[datetime]:
-    q = text(f"SELECT last_watermark_value FROM {BRONZE_SCHEMA}.{WATERMARK_TABLE} WHERE table_name = :t")
-    with engine.connect() as conn:
-        row = conn.execute(q, {"t": table}).fetchone()
-        return row[0] if row else None
+    with engine.begin() as conn:
+        result = conn.execute(
+            text(f"""
+                SELECT last_watermark_value
+                FROM "{BRONZE_SCHEMA}"."{WATERMARK_TABLE}"
+                WHERE table_name = :table
+            """),
+            {"table": table},
+        )
+        row = result.fetchone()
+        return row[0] if row else None  # type: ignore[return-value]
 
 
 def upsert_watermark(
     engine: Engine,
     table: str,
-    incremental_column: Optional[str],
-    last_value: Optional[datetime],
+    column: Optional[str],
+    value: Optional[datetime],
     mode: str,
     rows_inserted: int,
     rows_updated: int,
 ) -> None:
-    q = text(f"""
-        INSERT INTO {BRONZE_SCHEMA}.{WATERMARK_TABLE}
-            (table_name, incremental_column, last_watermark_value, last_run_at,
-             last_run_mode, last_run_rows_inserted, last_run_rows_updated, updated_at)
-        VALUES (:table, :col, :last_value, now(), :mode, :inserted, :updated, now())
-        ON CONFLICT (table_name) DO UPDATE SET
-            incremental_column     = EXCLUDED.incremental_column,
-            last_watermark_value   = COALESCE(EXCLUDED.last_watermark_value,
-                                               {BRONZE_SCHEMA}.{WATERMARK_TABLE}.last_watermark_value),
-            last_run_at            = EXCLUDED.last_run_at,
-            last_run_mode           = EXCLUDED.last_run_mode,
-            last_run_rows_inserted  = EXCLUDED.last_run_rows_inserted,
-            last_run_rows_updated   = EXCLUDED.last_run_rows_updated,
-            updated_at              = now()
-    """)
     with engine.begin() as conn:
         conn.execute(
-            q,
+            text(f"""
+                INSERT INTO "{BRONZE_SCHEMA}"."{WATERMARK_TABLE}"
+                    (table_name, incremental_column, last_watermark_value,
+                     last_run_at, last_run_mode,
+                     last_run_rows_inserted, last_run_rows_updated)
+                VALUES
+                    (:table, :column, :value, :now, :mode, :ins, :upd)
+                ON CONFLICT (table_name) DO UPDATE SET
+                    incremental_column     = EXCLUDED.incremental_column,
+                    last_watermark_value   = EXCLUDED.last_watermark_value,
+                    last_run_at            = EXCLUDED.last_run_at,
+                    last_run_mode          = EXCLUDED.last_run_mode,
+                    last_run_rows_inserted  = EXCLUDED.last_run_rows_inserted,
+                    last_run_rows_updated  = EXCLUDED.last_run_rows_updated
+            """),
             {
                 "table": table,
-                "col": incremental_column,
-                "last_value": last_value,
+                "column": column,
+                "value": value,
+                "now": datetime.now(timezone.utc),
                 "mode": mode,
-                "inserted": rows_inserted,
-                "updated": rows_updated,
+                "ins": rows_inserted,
+                "upd": rows_updated,
             },
         )
 
 
 def fetch_watermark_state(engine: Engine) -> list[dict]:
-    q = text(
-        f"SELECT table_name, incremental_column, last_watermark_value, last_run_at, "
-        f"last_run_mode, last_run_rows_inserted, last_run_rows_updated "
-        f"FROM {BRONZE_SCHEMA}.{WATERMARK_TABLE} ORDER BY table_name"
-    )
-    with engine.connect() as conn:
-        return [dict(row._mapping) for row in conn.execute(q)]
+    with engine.begin() as conn:
+        result = conn.execute(
+            text(f"""
+                SELECT table_name, incremental_column, last_watermark_value,
+                       last_run_at, last_run_mode,
+                       last_run_rows_inserted, last_run_rows_updated
+                FROM "{BRONZE_SCHEMA}"."{WATERMARK_TABLE}"
+                ORDER BY table_name
+            """),
+        )
+        cols = ["table_name", "incremental_column", "last_watermark_value",
+                "last_run_at", "last_run_mode",
+                "last_run_rows_inserted", "last_run_rows_updated"]
+        return [dict(zip(cols, row)) for row in result.fetchall()]
 
 
-def insert_log(engine: Engine, run_id: str, started_at: datetime, finished_at: datetime, r: CollectionResult) -> None:
-    """Best-effort audit row in <schema>.etl_logs -- never let logging itself fail the run."""
-    q = text(f"""
-        INSERT INTO {BRONZE_SCHEMA}.{LOG_TABLE}
-            (run_id, table_name, mode, incremental_column, status, mongo_rows,
-             postgres_rows_before, batch_rows, rows_inserted, rows_updated,
-             skipped_rows, postgres_rows_after, columns_count, validation_status,
-             validation_detail, error, started_at, finished_at, duration_seconds)
-        VALUES
-            (:run_id, :table_name, :mode, :incremental_column, :status, :mongo_rows,
-             :postgres_rows_before, :batch_rows, :rows_inserted, :rows_updated,
-             :skipped_rows, :postgres_rows_after, :columns_count, :validation_status,
-             :validation_detail, :error, :started_at, :finished_at, :duration_seconds)
-    """)
+def insert_log(
+    engine: Engine,
+    run_id: str,
+    started_at: datetime,
+    finished_at: datetime,
+    result: "CollectionResult",
+) -> None:
     try:
         with engine.begin() as conn:
             conn.execute(
-                q,
+                text(f"""
+                    INSERT INTO "{BRONZE_SCHEMA}"."{LOG_TABLE}"
+                        (run_id, started_at, finished_at, table_name,
+                         mode, watermark_before, watermark_after,
+                         mongo_rows, rows_inserted, rows_updated,
+                         batch_rows, skipped_rows, columns,
+                         status, validation_status, validation_detail,
+                         error, error_full, complex_fields_flattened)
+                    VALUES
+                        (:run_id, :started_at, :finished_at, :table_name,
+                         :mode, :watermark_before, :watermark_after,
+                         :mongo_rows, :rows_inserted, :rows_updated,
+                         :batch_rows, :skipped_rows, :columns,
+                         :status, :validation_status, :validation_detail,
+                         :error, :error_full, :complex_fields)
+                """),
                 {
                     "run_id": run_id,
-                    "table_name": r.name,
-                    "mode": r.mode,
-                    "incremental_column": r.incremental_column,
-                    "status": r.status,
-                    "mongo_rows": r.mongo_rows,
-                    "postgres_rows_before": r.postgres_rows_before,
-                    "batch_rows": r.batch_rows,
-                    "rows_inserted": r.rows_inserted,
-                    "rows_updated": r.rows_updated,
-                    "skipped_rows": r.skipped_rows,
-                    "postgres_rows_after": r.postgres_rows_after,
-                    "columns_count": r.columns,
-                    "validation_status": r.validation_status,
-                    "validation_detail": r.validation_detail,
-                    "error": r.error_full or r.error,
                     "started_at": started_at,
                     "finished_at": finished_at,
-                    "duration_seconds": r.seconds,
+                    "table_name": result.name,
+                    "mode": result.mode,
+                    "watermark_before": result.watermark_before,
+                    "watermark_after": result.watermark_after,
+                    "mongo_rows": result.mongo_rows,
+                    "rows_inserted": result.rows_inserted,
+                    "rows_updated": result.rows_updated,
+                    "batch_rows": result.batch_rows,
+                    "skipped_rows": result.skipped_rows,
+                    "columns": result.columns,
+                    "status": result.status,
+                    "validation_status": result.validation_status,
+                    "validation_detail": result.validation_detail,
+                    "error": result.error,
+                    "error_full": result.error_full,
+                    "complex_fields": result.complex_fields_flattened,
                 },
             )
     except SQLAlchemyError:
-        log.exception(f"[{r.name}] failed to write audit row to {BRONZE_SCHEMA}.{LOG_TABLE} (non-fatal)")
+        log.exception(f"[{result.name}] failed to write audit row to {BRONZE_SCHEMA}.{LOG_TABLE} (non-fatal)")
 
 
 def validate_collection(engine: Engine, table: str, expected_after: int) -> tuple[str, str]:
@@ -699,6 +493,73 @@ def drop_table(engine: Engine, table: str) -> None:
 # ---------------------------------------------------------------------------
 # Per-collection pipeline
 # ---------------------------------------------------------------------------
+@dataclass
+class CollectionResult:
+    name: str
+    status: str = "PENDING"
+    mode: str = ""
+    mongo_rows: int = 0
+    postgres_rows_before: int = 0
+    postgres_rows_after: int = 0
+    batch_rows: int = 0
+    skipped_rows: int = 0
+    rows_inserted: int = 0
+    rows_updated: int = 0
+    columns: int = 0
+    incremental_column: Optional[str] = None
+    watermark_before: Optional[datetime] = None
+    watermark_after: Optional[datetime] = None
+    validation_status: str = "N/A"
+    validation_detail: str = ""
+    complex_fields_flattened: list[str] = field(default_factory=list)
+    error: str = ""
+    error_full: str = ""
+    seconds: float = 0.0
+
+
+def short_error(exc: BaseException) -> str:
+    msg = str(exc)
+    if len(msg) > 200:
+        msg = msg[:200].rstrip() + " ..."
+    return msg
+
+
+def discover_collections(mongo_db) -> list[str]:
+    return sorted(
+        c for c in mongo_db.list_collection_names()
+        if not any(c.startswith(p) for p in MONGO_SYSTEM_PREFIXES)
+    )
+
+
+def detect_incremental_column(sample_fields: list[str], override: Optional[str]) -> Optional[str]:
+    if override:
+        return override if override in sample_fields else None
+    for col in INCREMENTAL_COLUMN_CANDIDATES:
+        if col in sample_fields:
+            return col
+    return None
+
+
+def ensure_unique_id_index(engine: Engine, collection: str) -> bool:
+    index_name = f"idx_{collection}_id"
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text(f"""
+                    CREATE UNIQUE INDEX IF NOT EXISTS "{index_name}"
+                    ON "{BRONZE_SCHEMA}"."{collection}" ("{PRIMARY_KEY_COLUMN}")
+                """)
+            )
+        return True
+    except SQLAlchemyError as exc:
+        log.warning(
+            f"[{collection}] unique index on {PRIMARY_KEY_COLUMN} could not be "
+            f"created ({exc}). Merge may produce duplicate-key errors -- "
+            f"falling back to append-only for this collection."
+        )
+        return False
+
+
 def process_collection(
     spark: SparkSession,
     mongo_db,

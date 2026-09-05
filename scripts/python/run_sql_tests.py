@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-scripts/run_sql_tests.py
+scripts/python/run_sql_tests.py
 
 Runs the project's own hand-written SQL tests -- not dbt tests. This is a
 plain custom test suite: every .sql file under <project_root>/tests/ is a
@@ -45,10 +45,10 @@ failed, so nothing gets buried in the middle of the log.
 
 USAGE
 -----
-    uv run scripts/run_sql_tests.py                  # every test, every layer
-    uv run scripts/run_sql_tests.py --layer silver    # just tests/silver/
-    uv run scripts/run_sql_tests.py --layer silver --layer gold  # multiple layers
-    uv run scripts/run_sql_tests.py --tests-dir path/to/tests
+    uv run scripts/python/run_sql_tests.py                  # every test, every layer
+    uv run scripts/python/run_sql_tests.py --layer silver    # just tests/silver/
+    uv run scripts/python/run_sql_tests.py --layer silver --layer gold  # multiple layers
+    uv run scripts/python/run_sql_tests.py --tests-dir path/to/tests
 
 Exit code: 0 if every test passed, 1 if any test failed or errored,
 2 for a setup problem (can't reach the tests dir or the database).
@@ -80,8 +80,10 @@ PREFERRED_LAYER_ORDER = ["bronze", "silver", "gold"]
 
 # ---------------------------------------------------------------------------
 # Make `utils` importable regardless of the CWD this script is launched from.
+# This file lives at <project_root>/scripts/python/run_sql_tests.py, so the
+# project root is three levels up.
 # ---------------------------------------------------------------------------
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
@@ -102,6 +104,9 @@ class TestResult:
     status: str  # PASS | FAIL | ERROR
     seconds: float
     message: str = ""
+
+
+TestResult.__test__ = False  # tell pytest not to collect this as a test class
 
 
 def discover_layers(tests_dir: Path) -> list[Path]:

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-dbt_runner.py
+scripts/python/dbt_runner.py
 
 Orchestrates the dbt layer pipeline in order: silver run -> silver test ->
 gold run -> gold test. Stops immediately if any stage fails, so a broken
@@ -11,12 +11,12 @@ models here carry `tags=['gold', 'dimension']` / `tags=['gold', 'fact']`.
 If your silver models use a different tag, change SILVER_SELECTOR below.
 
 Usage (from anywhere in the repo):
-    uv run scripts/dbt_runner.py
-    uv run scripts/dbt_runner.py --skip-tests
-    uv run scripts/dbt_runner.py --silver-only
-    uv run scripts/dbt_runner.py --gold-only       # assumes silver already built
-    uv run scripts/dbt_runner.py --full-refresh
-    uv run scripts/dbt_runner.py --project-dir path/to/dbt_project
+    uv run scripts/python/dbt_runner.py
+    uv run scripts/python/dbt_runner.py --skip-tests
+    uv run scripts/python/dbt_runner.py --silver-only
+    uv run scripts/python/dbt_runner.py --gold-only       # assumes silver already built
+    uv run scripts/python/dbt_runner.py --full-refresh
+    uv run scripts/python/dbt_runner.py --project-dir path/to/dbt_project
 
 Requires `rich` (uv add rich if it isn't already a project dependency).
 """
@@ -152,9 +152,11 @@ def main() -> None:
         console.print("[bold red]--silver-only and --gold-only are mutually exclusive.[/bold red]")
         sys.exit(1)
 
-    script_dir = Path(__file__).parent
+    # This file lives at <project_root>/scripts/python/dbt_runner.py, so the
+    # project root is three levels up. Logs land at <project_root>/logs.
+    script_dir = Path(__file__).resolve().parent
     project_dir = args.project_dir or find_project_root(script_dir)
-    log_dir = script_dir.parent / LOG_DIR_NAME
+    log_dir = script_dir.parent.parent / LOG_DIR_NAME
     log_dir.mkdir(exist_ok=True)
 
     console.print(f"[bold]dbt project:[/bold] {project_dir}")
