@@ -10,9 +10,9 @@ from utils.connection import (
     MONGO_URI,
     MONGO_DB
 )
-from utils.logger import get_logger
+from utils.logging_config import get_logger
 
-logger = get_logger("extraction", "engines")
+logger = get_logger("museum.extraction.engines")
 
 
 # =========================================================

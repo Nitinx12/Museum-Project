@@ -1,56 +1,50 @@
-import logging
-import os
-from datetime import datetime
+"""
+utils/logger.py
+================
 
-# utils/logger.py -> project root is one level up from this file's folder.
-_UTILS_DIR = os.path.dirname(os.path.abspath(__file__))
-PROJECT_ROOT = os.path.dirname(_UTILS_DIR)
+Backwards-compatibility shim.
 
+All new code should import from `utils.logging_config` instead:
 
-def get_logger(stage: str, name: str) -> logging.Logger:
-    valid_stages = ["Mongo Extract", "extraction", "transformation", "loading", "tests"]
-    if stage not in valid_stages:
-        raise ValueError(
-            f"Invalid stage '{stage}'. Must be one of: {valid_stages}"
-        )
+    from utils.logging_config import get_logger, setup_logging, new_run_id
 
-    # Create <project_root>/logs/<stage>/ folder — resolved from this file's
-    # location, not the caller's cwd, so it always lands in the same place
-    # no matter which directory the script was run from.
-    log_dir = os.path.join(PROJECT_ROOT, "logs", stage)
-    os.makedirs(log_dir, exist_ok=True)
+This module exists so existing import statements like:
 
-    # Log file: logs/<stage>/<name>_2024-06-01_12-00.log
-    run_time = datetime.now().strftime("%Y-%m-%d_%H-%M")
-    log_file = os.path.join(log_dir, f"{name}_{run_time}.log")
+    from utils.logger import get_logger
 
-    # Unique logger key per stage+name
-    logger_key = f"{stage}.{name}"
-    logger     = logging.getLogger(logger_key)
-    logger.setLevel(logging.DEBUG)
-    logger.propagate = False
+continue to work without any changes in the calling modules.  It
+re-exports the new public API and prints one deprecation warning on the
+first use so developers are steered toward the new import path.
 
-    # Avoid duplicate handlers
-    if logger.handlers:
-        return logger
+The deprecated `get_logger(stage, name)` signature is still supported via
+a shim inside `logging_config.py`.
+"""
 
-    # Formatter
-    fmt = logging.Formatter(
-        fmt="%(asctime)s | %(levelname)-8s | %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S"
-    )
+from __future__ import annotations
 
-    # Console Handler (INFO and above)
-    console_handler = logging.StreamHandler()
-    console_handler.setLevel(logging.INFO)
-    console_handler.setFormatter(fmt)
+import warnings
 
-    # File Handler (DEBUG and above)
-    file_handler = logging.FileHandler(log_file, encoding="utf-8")
-    file_handler.setLevel(logging.DEBUG)
-    file_handler.setFormatter(fmt)
+from utils.logging_config import (
+    get_logger,
+    new_run_id,
+    setup_logging,
+    DEFAULT_LOG_DIR,
+    PROJECT_ROOT,
+)
 
-    logger.addHandler(console_handler)
-    logger.addHandler(file_handler)
+# Emit a single DeprecationWarning so static analysis tools flag the old
+# import path without breaking anything at runtime.
+warnings.warn(
+    "import from utils.logger is deprecated; "
+    "use 'from utils.logging_config import get_logger' instead",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
-    return logger
+__all__ = [
+    "get_logger",
+    "new_run_id",
+    "setup_logging",
+    "DEFAULT_LOG_DIR",
+    "PROJECT_ROOT",
+]
