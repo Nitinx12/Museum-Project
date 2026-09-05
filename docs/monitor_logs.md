@@ -12,12 +12,12 @@ Monitors and cleans up the `logs/` directory at the project root.
 ## Usage
 
 ```bash
-./monitor_logs.sh                 # Summary report (default, read-only)
-./monitor_logs.sh summary         # Same as above
-./monitor_logs.sh clean           # Delete flagged logs (asks for confirmation)
-./monitor_logs.sh clean --dry-run # Preview what 'clean' would delete
-./monitor_logs.sh clean -y        # Skip the confirmation prompt
-./monitor_logs.sh -h              # Show help
+./scripts/bash/monitor_logs.sh                 # Summary report (default, read-only)
+./scripts/bash/monitor_logs.sh summary         # Same as above
+./scripts/bash/monitor_logs.sh clean           # Delete flagged logs (asks for confirmation)
+./scripts/bash/monitor_logs.sh clean --dry-run # Preview what 'clean' would delete
+./scripts/bash/monitor_logs.sh clean -y        # Skip the confirmation prompt
+./scripts/bash/monitor_logs.sh -h              # Show help
 ```
 
 ## Configuration
@@ -25,7 +25,7 @@ Monitors and cleans up the `logs/` directory at the project root.
 Override the defaults via environment variables:
 
 ```bash
-MAX_AGE_DAYS=14 MAX_SIZE_MB=10 ./monitor_logs.sh clean
+MAX_AGE_DAYS=14 MAX_SIZE_MB=10 ./scripts/bash/monitor_logs.sh clean
 ```
 
 ## Expected structure
@@ -36,7 +36,9 @@ project/
 │   ├── app.log
 │   ├── database.log
 │   └── ...
-└── monitor_logs.sh
+└── scripts/
+    └── bash/
+        └── monitor_logs.sh
 ```
 
 ## Status codes (summary report)
