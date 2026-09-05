@@ -241,6 +241,36 @@ def ensure_control_tables(engine: Engine) -> None:
     with engine.begin() as conn:
         conn.execute(text(watermarks_ddl))
         conn.execute(text(logs_ddl))
+        _migrate_etl_logs_columns(conn)
+
+
+def _migrate_etl_logs_columns(conn) -> None:
+    # CREATE TABLE IF NOT EXISTS is a no-op when the table already exists, so
+    # an older deployment (with a different etl_logs shape) keeps the old
+    # columns and every insert blows up with "column ... does not exist".
+    # We add any missing columns the current code expects, idempotently.
+    expected: dict[str, str] = {
+        "watermark_before": "TIMESTAMPTZ",
+        "watermark_after": "TIMESTAMPTZ",
+        "mongo_rows": "BIGINT",
+        "rows_inserted": "BIGINT",
+        "rows_updated": "BIGINT",
+        "batch_rows": "BIGINT",
+        "skipped_rows": "BIGINT",
+        "columns": "INTEGER",
+        "validation_status": "TEXT",
+        "validation_detail": "TEXT",
+        "error": "TEXT",
+        "error_full": "TEXT",
+        "complex_fields_flattened": "TEXT[]",
+    }
+    for col, typ in expected.items():
+        conn.execute(
+            text(
+                f'ALTER TABLE "{BRONZE_SCHEMA}"."{LOG_TABLE}" '
+                f'ADD COLUMN IF NOT EXISTS "{col}" {typ}'
+            )
+        )
 
 
 def table_exists(engine: Engine, table: str) -> bool:

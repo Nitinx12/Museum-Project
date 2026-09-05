@@ -70,17 +70,51 @@ Open the Airflow UI at `http://localhost:8081` and trigger the DAG.
 
 ```
 .
-├── dags/           # Airflow DAG definitions
-├── docker/         # Compose files and service configs
-├── dbt/            # Silver/Gold dbt models and tests
-├── tests/          # Hand-written SQL validation suite
-├── monitor.js      # Real-time file/git/dependency watcher
-├── scripts/        # Pipeline runners and bash helpers
-│   ├── bash/      # Shell scripts (setup, checks, runner, monitor)
-│   ├── ps1/       # PowerShell runner (pipeline_runner.ps1)
-│   └── python/    # Core pipeline scripts (incremental.py, dbt_runner.py, run_sql_tests.py)
-├── main.py         # Top-level pipeline entry point
-└── docs/           # Detailed documentation
+├── airflow/         # Airflow DAG definitions
+├── docker/          # Compose files and service configs
+├── museum_dbt/      # Silver/Gold dbt models and tests
+├── tests/           # Hand-written SQL validation suite
+├── scripts/         # Pipeline runners and bash helpers
+│   ├── bash/        # Shell scripts (setup, checks, runner, monitor)
+│   ├── ps1/         # PowerShell runner (pipeline_runner.ps1)
+│   └── python/      # Core pipeline scripts (incremental.py, dbt_runner.py, run_sql_tests.py)
+├── main.py          # Top-level pipeline entry point (Python)
+└── docs/            # Detailed documentation
+```
+
+## Makefile targets
+
+The top-level `Makefile` provides one-liner commands for every pipeline operation:
+
+```bash
+make help              # show all targets
+make install           # install Python deps (uv sync)
+make check-deps        # pre-flight: tools, .env, jars, Python deps
+make test              # run unit tests
+make lint              # syntax-check all .py files
+make pipeline          # full ETL: bronze → silver → gold → tests
+make pipeline-full     # full ETL with --full-refresh on every stage
+make pipeline-bronze   # bronze load + tests only
+make pipeline-tests    # load + build, skip test stages
+make dry-run          # discover + count only (no writes)
+make logs-summary      # report on logs/ directory
+make logs-clean       # interactive log cleanup
+make clean            # remove bytecode and pytest cache
+```
+
+Behind the scenes, `make pipeline` invokes `main.py`, which sequences the
+stages in the same order as the Airflow DAG: bronze load, silver dbt,
+gold dbt, SQL tests.
+
+### dbt output
+
+`dbt_runner.py` prints only stakeholder-relevant events by default — model
+results, row counts, and the final PASS/ERROR tally. The full dbt event
+stream (including debug noise) is always written to `logs/<stage>_<ts>.log`
+for post-mortem use. Pass `--verbose` to any stage to stream every event:
+
+```bash
+uv run scripts/python/dbt_runner.py --gold-only --verbose
 ```
 
 ## Configuration
@@ -91,7 +125,8 @@ string, Postgres credentials, and Airflow admin login before first run.
 ## Running tests
 
 ```bash
-docker compose exec airflow-webserver dbt test
+make test              # unit tests (pytest, no DB needed)
+make lint             # Python syntax / AST check
 ```
 
 The custom SQL suite under `tests/` runs automatically as part of the

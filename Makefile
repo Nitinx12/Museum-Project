@@ -20,7 +20,10 @@
 # ============================================================================
 
 SHELL := /usr/bin/env bash
-PY    := uv run python
+# Resolve PY against the project's own .venv (created by `uv sync`) so the
+# Makefile works the same whether it's invoked from PowerShell, Git Bash,
+# or WSL -- none of which guarantee `uv` is on PATH.
+PY    := .venv/Scripts/python.exe
 PIP   := uv
 
 .DEFAULT_GOAL := help
@@ -33,6 +36,10 @@ help: ## show this help
 install: ## install dependencies with uv
 	uv sync --all-extras --dev
 
+.PHONY: check-deps
+check-deps: ## run pre-flight dependency checks (tools, .env, jars, Python deps)
+	bash scripts/bash/check_dependencies.sh
+
 .PHONY: test
 test: ## run unit tests
 	uv run pytest tests/unit
@@ -43,19 +50,19 @@ lint: ## syntax-check every Python file
 
 .PHONY: pipeline
 pipeline: ## run the full ETL pipeline (load + build + tests, no refresh)
-	uv run main.py
+	$(PY) main.py
 
 .PHONY: pipeline-full
 pipeline-full: ## run the full pipeline with --full-refresh
-	uv run main.py --full
+	$(PY) main.py --full
 
 .PHONY: pipeline-bronze
 pipeline-bronze: ## bronze load + bronze tests only
-	uv run main.py --bronze-only
+	$(PY) main.py --bronze-only
 
 .PHONY: pipeline-tests
 pipeline-tests: ## load + build, skip both test stages
-	uv run main.py --skip-tests
+	$(PY) main.py --skip-tests
 
 .PHONY: dry-run
 dry-run: ## discover + count only, no writes

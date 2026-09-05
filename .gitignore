@@ -420,3 +420,4 @@ reports/output/
 # exports/
 .monitor
 env
+.qwen
