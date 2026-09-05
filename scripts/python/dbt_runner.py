@@ -148,19 +148,40 @@ def _format_event(event) -> str | None:
 def find_project_root(start: Path) -> Path:
     """
     Walk upward from `start` looking for dbt_project.yml. Falls back to
-    scanning every immediate subdirectory of the repo root (start's parent),
-    since the dbt project commonly lives in its own folder (e.g. museum_dbt/)
-    rather than at the repo root itself.
+    scanning the immediate children of the repo root (the first ancestor
+    whose children include a `scripts/` directory), since the dbt project
+    commonly lives in its own folder (e.g. museum_dbt/) rather than at
+    the repo root itself.
     """
     current = start.resolve()
+
+    # Primary: walk upward looking for dbt_project.yml directly.
     for parent in [current, *current.parents]:
         if (parent / "dbt_project.yml").exists():
             return parent
 
-    # This script lives at <repo>/scripts/python/dbt_runner.py, so the repo
-    # root is current.parent.parent. current.parent alone is the scripts/
-    # directory, which never contains a dbt project.
-    repo_root = current.parent.parent
+    # Fallback: the dbt project may live in its own subfolder.
+    # Find the repo root by walking upward until we find a `scripts/`
+    # directory among the ancestor's children. This naturally stops
+    # the search at the actual repo boundary (which has scripts/) and
+    # also bounds it in test environments where pytest tmp dirs are shared.
+    repo_root = None
+    for ancestor in [current, *current.parents]:
+        if (ancestor / "scripts").is_dir():
+            repo_root = ancestor
+            break
+        # Hard stop at filesystem root so we never walk the entire filesystem.
+        if ancestor == ancestor.parent:
+            break
+
+    if repo_root is None:
+        console.print(
+            f"[bold red]Could not locate dbt_project.yml[/bold red] starting "
+            f"from {start}. No ancestor contains a scripts/ directory. "
+            f"Pass --project-dir explicitly."
+        )
+        sys.exit(1)
+
     matches = sorted(
         child for child in repo_root.iterdir()
         if child.is_dir() and (child / "dbt_project.yml").exists()
@@ -176,8 +197,7 @@ def find_project_root(start: Path) -> Path:
         sys.exit(1)
 
     console.print(
-        f"[bold red]Could not locate dbt_project.yml[/bold red] starting "
-        f"from {start} or in any subfolder of {repo_root}. "
+        f"[bold red]Could not locate dbt_project.yml[/bold red] under {repo_root}. "
         f"Pass --project-dir explicitly."
     )
     sys.exit(1)

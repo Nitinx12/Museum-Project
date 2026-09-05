@@ -421,3 +421,4 @@ reports/output/
 .monitor
 env
 .qwen
+pytest.ini
