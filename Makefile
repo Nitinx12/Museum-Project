@@ -46,7 +46,7 @@ test: ## run unit tests
 
 .PHONY: lint
 lint: ## syntax-check every Python file
-	uv run python -c "import ast, pathlib; [ast.parse(p.read_bytes()) for p in pathlib.Path('.').rglob('*.py')]"
+	uv run python -c "import ast, pathlib; [ast.parse(p.read_bytes()) for p in pathlib.Path('.').rglob('*.py') if '.venv' not in str(p)]"
 
 .PHONY: pipeline
 pipeline: ## run the full ETL pipeline (load + build + tests, no refresh)
