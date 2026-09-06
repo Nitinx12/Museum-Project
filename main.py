@@ -93,7 +93,7 @@ def source_bash_env() -> None:
             text=True,
         )
     except (subprocess.CalledProcessError, FileNotFoundError) as exc:
-        console.print(f"[yellow]⚠ Could not source {setup_script}: {exc}[/yellow]")
+        console.print(f"[yellow]! Could not source {setup_script}: {exc}[/yellow]")
         return
     # Pull only the variables that were set by setup_env.sh -- never let it
     # overwrite unrelated host env vars (PATH, HOME, etc.).
