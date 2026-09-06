@@ -130,6 +130,8 @@ Full details live in `docs/`:
 | Doc | Covers |
 |---|---|
 | [`ARCHITECTURE.md`](docs/ARCHITECTURE.md) | System design, data flow, reliability principles |
+| [`data_catalog.md`](docs/data_catalog.md) | Gold layer data dictionary and business logic |
+| [`TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md) | Guide for resolving common pipeline failures |
 | [`docker.md`](docs/docker.md) | Containers, services, startup sequence |
 | [`scripts.md`](docs/scripts.md) | Guide to all pipeline, bash, and automation scripts |
 | [`pipeline.md`](docs/pipeline.md) | Local pipeline runner (`scripts/ps1/pipeline_runner.ps1`) |

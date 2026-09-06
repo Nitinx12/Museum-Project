@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `.env.example` — template for required environment variables
+- `docs/data_catalog.md` — detailed data dictionary for the Gold layer
+- `docs/TROUBLESHOOTING.md` — guide for resolving common pipeline and DB failures
+- `scripts/python/generate_quality_report.py` — generates a human-readable HTML summary of data quality trends
 - `.claude/` directory and `CLAUDE.md` — project guide for AI agents containing build/run commands and coding standards
 - `utils/logging_config.py` — industry-standard logging with `logging.config.dictConfig`, rotating JSON file handler, per-run correlation IDs (`run_id`), ECS-compatible JSON fields, and env-var configuration (`LOG_LEVEL`, `LOG_DIR`, `LOG_FORMAT`, `LOG_MAX_BYTES`, `LOG_BACKUP_COUNT`)
 - `utils/logger.py` — backwards-compatibility shim that re-exports from `utils.logging_config` and emits a `DeprecationWarning` on first import
