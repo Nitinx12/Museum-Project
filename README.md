@@ -131,11 +131,9 @@ Full details live in `docs/`:
 |---|---|
 | [`ARCHITECTURE.md`](docs/ARCHITECTURE.md) | System design, data flow, reliability principles |
 | [`docker.md`](docs/docker.md) | Containers, services, startup sequence |
-| [`scripts.md`](docs/scripts.md) | What each pipeline script does |
+| [`scripts.md`](docs/scripts.md) | Guide to all pipeline, bash, and automation scripts |
 | [`pipeline.md`](docs/pipeline.md) | Local pipeline runner (`scripts/ps1/pipeline_runner.ps1`) |
 | [`utils.md`](docs/utils.md) | Shared connection/engine/logging helpers |
-| [`JS.md`](docs/JS.md) | Real-time file, git, and dependency watcher (`monitor.js`) |
-| [`monitor_logs.md`](docs/monitor_logs.md) | Log directory summary & cleanup (`scripts/bash/monitor_logs.sh`) |
 
 ## Contributing
 

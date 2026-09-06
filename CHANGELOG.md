@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Lazy DB imports** — `incremental.py` and `run_sql_tests.py` now defer `postgres_engine`, `mongo_client`, `MONGO_DB`, and `MONGO_URI` imports to function scope so pytest can collect tests on machines without a database connection
 
 ### Changed
+- **Documentation consolidation** — merged `JS.md` and `monitor_logs.md` into a simplified `docs/scripts.md` and updated `README.md`
 - **Directory layout** — all Python pipeline scripts moved from `scripts/` into `scripts/python/`:
   - `scripts/incremental.py` → `scripts/python/incremental.py`
   - `scripts/dbt_runner.py` → `scripts/python/dbt_runner.py`
