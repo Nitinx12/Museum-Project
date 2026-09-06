@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `.claude/` directory and `CLAUDE.md` — project guide for AI agents containing build/run commands and coding standards
 - `utils/logging_config.py` — industry-standard logging with `logging.config.dictConfig`, rotating JSON file handler, per-run correlation IDs (`run_id`), ECS-compatible JSON fields, and env-var configuration (`LOG_LEVEL`, `LOG_DIR`, `LOG_FORMAT`, `LOG_MAX_BYTES`, `LOG_BACKUP_COUNT`)
 - `utils/logger.py` — backwards-compatibility shim that re-exports from `utils.logging_config` and emits a `DeprecationWarning` on first import
 - **Unit test suite** — 49 tests covering `utils/logging_config`, `main.py` stage construction, `dbt_runner.py` discovery/argparse, and `run_sql_tests.py` layer discovery
@@ -16,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **pytest configuration** — `pytest.ini` and `tests/conftest.py` so `uv run pytest` works without flags; `pytest` + `pytest-mock` added as dev dependencies
 
 ### Fixed
+- **Docker configuration** — `docker/Dockerfile` and `docker/compose.yml` now reference the correct `scripts/` directory instead of `pipeline/` and include missing copies/mounts of `utils/`, `tests/`, and `jars/` to prevent runtime failures
 - **Lazy DB imports** — `incremental.py` and `run_sql_tests.py` now defer `postgres_engine`, `mongo_client`, `MONGO_DB`, and `MONGO_URI` imports to function scope so pytest can collect tests on machines without a database connection
 
 ### Changed

@@ -39,9 +39,10 @@ x-airflow-common: &airflow-common
     # NOTE: host folder is `museum_dbt/`, mounted as /opt/airflow/dbt so
     # existing DAG code / dbt invocations referencing that path still work.
     - ../museum_dbt:/opt/airflow/dbt
-    # NOTE: host folder is `pipeline/` — update this if your PySpark jobs
-    # actually live somewhere else (e.g. scripts/).
-    - ../pipeline:/opt/airflow/spark_jobs
+    - ../scripts:/opt/airflow/scripts
+    - ../utils:/opt/airflow/utils
+    - ../tests:/opt/airflow/tests
+    - ../jars:/opt/airflow/jars
   user: "${AIRFLOW_UID:-50000}:0"
   depends_on: &airflow-common-depends-on
     redis:
